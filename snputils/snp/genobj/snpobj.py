@@ -1390,14 +1390,13 @@ class SNPObject:
         2. **Custom start and end positions**:
         - Provide `physical_pos` (2D array of shape (n_windows, 2)) as the [start, end] base-pair 
          coordinates for each window. 
-        - If `chromosomes` is not provided and the dataset has exactly one chromosome, it will be 
-        assumed all windows are on that chromosome. 
+        - If `chromosomes` is not provided and `self` has exactly one chromosome, all windows are 
+        assumed to belong to that chromosome. 
         - If multiple chromosomes exist but `chromosomes` is missing, an error will be raised.
         - Optionally, provide `window_sizes` to store the SNP count per-window.
 
         3. **Matching existing windows**:
-        - Provide a `laiobj` from which to reuse window definitions 
-         (physical_pos, chromosomes, window_sizes).
+        - Reuse window definitions (`physical_pos`, `chromosomes`, `window_sizes`) from an existing `laiobj`.
 
         Args:
             window_size (int, optional): 
