@@ -1,6 +1,7 @@
 import logging
-import os
 from typing import List, Optional
+import os
+import csv
 
 import numpy as np
 import polars as pl
@@ -23,6 +24,7 @@ class PGENReader(SNPBaseReader):
         variant_ids: Optional[np.ndarray] = None,
         variant_idxs: Optional[np.ndarray] = None,
         sum_strands: bool = False,
+        separator: str = None,
     ) -> SNPObject:
         """
         Read a pgen fileset (pgen, psam, pvar) into a SNPObject.
@@ -39,8 +41,10 @@ class PGENReader(SNPBaseReader):
             variant_ids: List of variant IDs to read. If None and variant_idxs is None, all variants are read.
             variant_idxs: List of variant indices to read. If None and variant_ids is None, all variants are read.
             sum_strands: True if the maternal and paternal strands are to be summed together,
-            False if the strands are to be stored separately. Note that due to the pgenlib backend, when sum_strands is False,
-            8 times as much RAM is required. Nonetheless, the calldata_gt will only be double the size.
+                False if the strands are to be stored separately. Note that due to the pgenlib backend, when sum_strands is False,
+                8 times as much RAM is required. Nonetheless, the calldata_gt will only be double the size.
+            separator: Separator used in the pvar file. If None, the separator is automatically detected.
+                If the automatic detection fails, please specify the separator manually.
 
         Returns:
             snpobj: SNPObject containing the data from the pgen fileset.
@@ -105,25 +109,28 @@ class PGENReader(SNPBaseReader):
                 for line_num, line in enumerate(file):
                     if line.startswith("##"):  # Metadata
                         continue
-                    elif line.startswith("#CHROM"):  # Header
-                        pvar_header_line_num = line_num
-                        header = line.strip().split()
-                        break
-                    elif not line.startswith("#"):  # If no header, look at line 1
-                        pvar_has_header = False
-                        cols_in_pvar = len(line.strip().split())
-                        if cols_in_pvar == 5:
-                            header = ["#CHROM", "ID", "POS", "ALT", "REF"]
-                        elif cols_in_pvar == 6:
-                            header = ["#CHROM", "ID", "CM", "POS", "ALT", "REF"]
-                        else:
-                            raise ValueError(
-                                f"{pvar_filename} is not a valid pvar file."
-                            )
-                        break
+                    else:
+                        if separator is None:
+                            separator = csv.Sniffer().sniff(file.readline()).delimiter
+                        if line.startswith("#CHROM"):  # Header
+                            pvar_header_line_num = line_num
+                            header = line.strip().split()
+                            break
+                        elif not line.startswith("#"):  # If no header, look at line 1
+                            pvar_has_header = False
+                            cols_in_pvar = len(line.strip().split(separator))
+                            if cols_in_pvar == 5:
+                                header = ["#CHROM", "ID", "POS", "ALT", "REF"]
+                            elif cols_in_pvar == 6:
+                                header = ["#CHROM", "ID", "CM", "POS", "ALT", "REF"]
+                            else:
+                                raise ValueError(
+                                    f"{pvar_filename} is not a valid pvar file."
+                                )
+                            break
 
             pvar_reading_args = {
-                'separator': '\t',
+                'separator': separator,
                 'skip_rows': pvar_header_line_num,
                 'has_header': pvar_has_header,
                 'new_columns': None if pvar_has_header else header,
@@ -170,7 +177,7 @@ class PGENReader(SNPBaseReader):
 
             psam = pl.read_csv(
                 filename_noext + ".psam",
-                separator='\t',
+                separator=separator,
                 has_header=psam_has_header,
                 new_columns=None if psam_has_header else ["FID", "IID", "PAT", "MAT", "SEX", "PHENO1"],
             ).with_row_index()

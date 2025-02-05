@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional
+import csv
 
 import numpy as np
 import polars as pl
@@ -22,6 +23,7 @@ class BEDReader(SNPBaseReader):
         variant_ids: Optional[np.ndarray] = None,
         variant_idxs: Optional[np.ndarray] = None,
         sum_strands: bool = False,
+        separator: Optional[str] = None,
     ) -> SNPObject:
         """
         Read a bed fileset (bed, bim, fam) into a SNPObject.
@@ -41,6 +43,8 @@ class BEDReader(SNPBaseReader):
                 False if the strands are to be stored separately. Note that due to the pgenlib backend, when sum_strands is False,
                 8 times as much RAM is required. Nonetheless, the calldata_gt will only be double the size.
                 WARNING: bed files do not store phase information. If you need it, use vcf or pgen.
+            separator: Separator used in the pvar file. If None, the separator is automatically detected.
+                If the automatic detection fails, please specify the separator manually.
 
         Returns:
             snpobj: SNPObject containing the data from the pgen fileset.
@@ -81,9 +85,13 @@ class BEDReader(SNPBaseReader):
         else:
             log.info(f"Reading {filename_noext}.bim")
 
+            if separator is None:
+                with open(filename_noext + ".bim", "r") as file:
+                    separator = csv.Sniffer().sniff(file.readline()).delimiter
+
             bim = pl.read_csv(
                 filename_noext + ".bim",
-                separator='\t',
+                separator=separator,
                 has_header=False,
                 new_columns=["#CHROM", "ID", "CM", "POS", "ALT", "REF"],
                 schema_overrides={
@@ -112,7 +120,7 @@ class BEDReader(SNPBaseReader):
 
             fam = pl.read_csv(
                 filename_noext + ".fam",
-                separator='\t',
+                separator=separator,
                 has_header=False,
                 new_columns=["Family ID", "IID", "Father ID",
                              "Mother ID", "Sex code", "Phenotype value"],
