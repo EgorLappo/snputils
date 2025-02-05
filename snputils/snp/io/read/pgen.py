@@ -38,8 +38,8 @@ class PGENReader(SNPBaseReader):
             sample_idxs: List of sample indices to read. If None and sample_ids is None, all samples are read.
             variant_ids: List of variant IDs to read. If None and variant_idxs is None, all variants are read.
             variant_idxs: List of variant indices to read. If None and variant_ids is None, all variants are read.
-            sum_strands: True if the maternal and paternal strands are to be summed together, 
-            False if the strands are to be stored separately. Note that due to the pgenlib backend, when sum_strands is False, 
+            sum_strands: True if the maternal and paternal strands are to be summed together,
+            False if the strands are to be stored separately. Note that due to the pgenlib backend, when sum_strands is False,
             8 times as much RAM is required. Nonetheless, the calldata_gt will only be double the size.
 
         Returns:
@@ -121,60 +121,41 @@ class PGENReader(SNPBaseReader):
                                 f"{pvar_filename} is not a valid pvar file."
                             )
                         break
-                    
-            def lazy_read(filename: str, **kwargs) -> pl.LazyFrame:
-                """
-                Simple reader function needed due to lack of support for scanning zstd files in polars.
-                
-                Args:
-                    filename (str): pvar file, either .pvar or .pvar.zst
-                    **kwargs: CSV arguments for polars
-                
-                Returns:
-                    pl.LazyFrame
-                """
-                if filename.endswith('.zst'):
-                    return pl.read_csv(filename, **kwargs).lazy()
-                else:
-                    return pl.scan_csv(filename, **kwargs)
 
-            pvar = lazy_read(
-                pvar_filename,
-                separator='\t',
-                skip_rows=pvar_header_line_num,
-                has_header=pvar_has_header,
-                new_columns=None if pvar_has_header else header,
-                schema_overrides={
+            pvar_reading_args = {
+                'separator': '\t',
+                'skip_rows': pvar_header_line_num,
+                'has_header': pvar_has_header,
+                'new_columns': None if pvar_has_header else header,
+                'schema_overrides': {
                     "#CHROM": pl.String,
                     "POS": pl.UInt32,
                     "ID": pl.String,
                     "REF": pl.String,
                     "ALT": pl.String,
-                },
-            )
+                }
+            }
+            if pvar_filename.endswith('.zst'):
+                pvar = pl.read_csv(pvar_filename, **pvar_reading_args).lazy()
+            else:
+                pvar = pl.scan_csv(pvar_filename, **pvar_reading_args)
 
-            # keeping track of indices provides a problem for lazy execution ->
-            # it can block predicate pushdown optimization and cause the whole lf to be read into memory
-            # instead we keep track of the index with "ID" and ensure that is the only columm always read into memory
-            idxs = pvar.select("ID").with_row_index().collect()
+            # We need to track row positions of variants but doing this with lazy operations would
+            # defeat predicate pushdown optimization and force loading the entire DataFrame.
+            # Solution: We only materialize the ID column with indices, keeping memory usage minimal
+            # while maintaining the ability to map between variant IDs and their file positions.
+            variant_id_idxs = pvar.select("ID").with_row_index().collect()
 
-            file_num_variants = idxs.height
+            file_num_variants = variant_id_idxs.height
 
             if variant_ids is not None:
                 num_variants = np.size(variant_ids)
                 pvar = pvar.filter(pl.col("ID").is_in(variant_ids)).collect()
-                variant_idxs = (
-                    idxs.filter(pl.col("ID").is_in(variant_ids))
-                    .select("index")
-                    .to_series()
-                    .to_numpy()
-                )
+                variant_idxs = variant_id_idxs.filter(pl.col("ID").is_in(variant_ids)).select("index").to_series().to_numpy()
             elif variant_idxs is not None:
                 num_variants = np.size(variant_idxs)
                 variant_idxs = np.array(variant_idxs, dtype=np.uint32)
-                variant_ids = idxs.filter(pl.col("index").is_in(variant_idxs)).select(
-                    "ID"
-                )
+                variant_ids = variant_id_idxs.filter(pl.col("index").is_in(variant_idxs)).select("ID")
                 pvar = pvar.filter(pl.col("ID").is_in(variant_ids)).collect()
             else:
                 num_variants = file_num_variants
