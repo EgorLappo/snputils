@@ -4,7 +4,7 @@
   </a>
 </p>
 
-# snputils: A Python library for processing genomes
+# snputils: A Python Library for Processing Genetic Variation and Population Structure
 
 [![License BSD-3](https://img.shields.io/pypi/l/snputils.svg?color=green)](https://github.com/ai-sandbox/snputils/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/snputils.svg?color=green)](https://pypi.org/project/snputils)
