@@ -569,7 +569,7 @@ class maasMDS:
                 self.masks_file
             )
         
-        distance_list = [[distance_mat(first=masks[0][self.ancestry], dist_func=self.distance_type)]]
+        distance_list = [[distance_mat(first=masks[self.ancestry], dist_func=self.distance_type)]]
         
         self.X_new_ = mds_transform(distance_list, groups, weights, ind_ID_list, self.n_components)
         self.haplotypes_ = ind_ID_list

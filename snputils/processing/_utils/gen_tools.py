@@ -334,12 +334,13 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
 
 def process_snpobj(snpobj, rsid_or_chrompos):
     """                                                                                       
-    Format genotype data from a SNPObject:
-    - Reshape the 3D genotype array into a 2D matrix (n_snps, n_haplotypes).
+    Process genotype data from a SNPObject:
+    - Reshape the 3D genotype array (n_snps, n_samples, 2) to 2D (n_snps, n_samples × 2). 
+    - Replace missing values (-1) with NaN.
+    - Reshape the 3D genotype array (n_snps, n_samples, 2) into a 2D matrix (n_snps, n_samples × 2) and replace missing values (-1) with NaN.
     - Replace missing genotype values (indicated by -1) with NaN.
     - Generate variant identifiers using either the rsID or chromosome_position format, based on a provided flag.
     - Create diploid sample identifiers by appending "_A" and "_B" to each sample.
-    - 
 
     This function processes genetic variant data from a SNPObject, restructuring genotype information, 
     formatting variant identifiers, and ensuring consistency in allele encoding.
@@ -364,8 +365,6 @@ def process_snpobj(snpobj, rsid_or_chrompos):
                 List of variant identifiers, formatted based on `rsid_or_chrompos` selection.
             - list of int: 
                 List of genomic positions corresponding to the variants.
-            - dict: 
-                Updated dictionary mapping variant identifiers to reference alleles.
     """
     start_time = time.time()
 
@@ -388,8 +387,7 @@ def process_snpobj(snpobj, rsid_or_chrompos):
     else:
         sys.exit("Illegal value for rsid_or_chrompos. Choose 1 for rsID format or 2 for Chromosome_position format.")
 
-    # Extract reference alleles and individual sample IDs
-    ref_vcf = snpobj['variants_ref']
+    # Extract individual sample IDs
     samples = snpobj['samples']
 
     # Generate individual IDs for diploid samples
@@ -517,7 +515,7 @@ def get_masked_matrix(
 
     Returns:
         tuple:
-            - masked_matrices (dict or np.ndarray): 
+            - masks (dict or np.ndarray): 
                 If `is_masked` is True, returns a dictionary containing masked genotype matrices for each 
                 ancestry group. If False, returns the unmasked genotype matrix.
             - ind_IDs (np.ndarray): 
@@ -536,7 +534,7 @@ def get_masked_matrix(
         ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
         unique_ancestries = [str(i) for i in np.arange(0, n_ancestries)]
         ancestry_int_list = unique_ancestries
-        masked_matrices = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
+        masks = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
     
     else:
         if not is_masked:
@@ -544,22 +542,22 @@ def get_masked_matrix(
         else:
             ancestry_int_list = [str(i) for i in np.arange(0, n_ancestries)]
 
-        masked_matrices = {}
+        masks = {}
         if average_strands:
             calldata_gt_avg = average_parent_snps(calldata_gt)
             for ancestry in ancestry_int_list:
-                masked_matrices[ancestry] = calldata_gt_avg
+                masks[ancestry] = calldata_gt_avg
         else:
             for ancestry in ancestry_int_list:
-                masked_matrices[ancestry] = calldata_gt
+                masks[ancestry] = calldata_gt
         logging.info("No masking")
         
-    return masked_matrices, ind_IDs, variants_id
+    return masks, ind_IDs, variants_id
 
 
 def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos): 
     """                                                                                       
-    Compute ancestry-based masked genotype matrixes, SNP identifiers, and individual IDs.
+    Obtain ancestry-based masked genotype matrixes, SNP identifiers, and haplotype identifiers.
 
     Args:
         snpobj (SNPObject): 
@@ -578,22 +576,19 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos):
 
     Returns:
         tuple:
-            - masks (list of np.ndarray): 
-                A list containing masked genotype matrices for each ancestry across the processed arrays.
-            - rs_ID_list (list of list): 
+            - masks (np.ndarray): 
+                If `is_masked` is True, returns a dictionary containing masked genotype matrices for each 
+                ancestry group. If False, returns the unmasked genotype matrix.
+            - variants_id (list of list): 
                 A list where each entry contains the SNP identifiers (rs IDs) for a given array.
-            - ind_ID_list (list of np.ndarray): 
+            - haplotypes (list of np.ndarray): 
                 A list where each entry contains individual IDs for the corresponding array.
     """
-    masks = []
-    rs_ID_list = []
-    ind_ID_list = []
-
     # Obtain number of unique ancestries in LocalAncestryObject
     n_ancestries = laiobj.n_ancestries
 
     logging.info("------ Array Processing: ------")
-    genome_matrix, ind_IDs, variants_id = get_masked_matrix(
+    masks, haplotypes, variants_id = get_masked_matrix(
         snpobj, 
         laiobj,
         is_masked,
@@ -602,14 +597,10 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos):
         rsid_or_chrompos
     )
 
-    masks.append(genome_matrix)
-    rs_ID_list.append(variants_id)
-    if (average_strands == False):
-        ind_ID_list.append(ind_IDs)
-    else:
-        ind_ID_list.append(remove_AB_indIDs(ind_IDs))
+    if average_strands:
+        haplotypes = remove_AB_indIDs(haplotypes)
         
-    return masks, rs_ID_list, ind_ID_list
+    return masks, variants_id, haplotypes
 
 
 def remove_AB_indIDs(ind_IDs):
@@ -629,14 +620,14 @@ def add_AB_indIDs(ind_IDs):
     return new_ind_IDs
 
 
-def process_labels_weights(labels_file, masks, rs_ID_list, ind_ID_list, average_strands, ancestry, min_percent_snps, remove_labels_dict, is_weighted, save_masks, masks_file):
+def process_labels_weights(labels_file, masks, variants_id, haplotypes, average_strands, ancestry, min_percent_snps, remove_labels_dict, is_weighted, save_masks, masks_file):
     labels_df = pd.read_csv(labels_file, sep='\t')
     labels_df['indID'] = labels_df['indID'].astype(str)
     label_list = []
     weight_list = []
     
-    masked_matrix = masks[0][ancestry]
-    ind_IDs = ind_ID_list[0]
+    masked_matrix = masks[ancestry]
+    ind_IDs = haplotypes
     if average_strands:
         labels = np.array(labels_df['label'][labels_df['indID'].isin(ind_IDs)])
         label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(ind_IDs)])
@@ -711,17 +702,17 @@ def process_labels_weights(labels_file, masks, rs_ID_list, ind_ID_list, average_
     ind_IDs = ind_IDs_new
     labels = labels_new
     weights = weights_new
-    masks[0][ancestry] = masked_matrix
-    ind_ID_list[0] = ind_IDs
+    masks[ancestry] = masked_matrix
+    haplotypes = ind_IDs
     label_list += labels.tolist()
     weight_list += weights.tolist()
 
     label_list = np.array(label_list)
     weight_list = np.array(weight_list)
     if save_masks:
-        np.savez_compressed(masks_file, masks=masks, rs_ID_list=rs_ID_list, ind_ID_list=ind_ID_list,
+        np.savez_compressed(masks_file, masks=masks, variants_id=variants_id, haplotypes=haplotypes,
                  labels=label_list, weights=weight_list, protocol=4)
-    return masks, ind_ID_list, label_list, weight_list
+    return masks, haplotypes, label_list, weight_list
 
 
 def center_masked_matrix(masked_matrix):
