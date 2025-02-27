@@ -491,7 +491,6 @@ def get_masked_matrix(
         snpobj, 
         laiobj, 
         is_masked, 
-        n_ancestries, 
         average_strands, 
         rsid_or_chrompos
     ):
@@ -504,8 +503,6 @@ def get_masked_matrix(
         is_masked (bool): 
             If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
             corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
-        n_ancestries (int): 
-            Number of unique ancestry groups in the dataset.
         average_strands (bool): 
             Whether to average haplotypes for each individual.
         rsid_or_chrompos (int): 
@@ -527,6 +524,9 @@ def get_masked_matrix(
     # format variant identifiers, and ensure consistency in allele encoding
     calldata_gt, ind_IDs, variants_id, positions = process_snpobj(snpobj, rsid_or_chrompos)
     
+    # Obtain number of unique ancestries in LocalAncestryObject
+    n_ancestries = laiobj.n_ancestries
+
     if is_masked:
         # Obtain a 
         # Process the LocalAncestryObject containing ancestry segment data
@@ -557,7 +557,7 @@ def get_masked_matrix(
 
 def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos): 
     """                                                                                       
-    Obtain ancestry-based masked genotype matrixes, SNP identifiers, and haplotype identifiers.
+    Obtain ancestry-based masked genotype matrixes and correponding SNP identifiers and haplotype identifiers.
 
     Args:
         snpobj (SNPObject): 
@@ -579,27 +579,26 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos):
             - masks (np.ndarray): 
                 If `is_masked` is True, returns a dictionary containing masked genotype matrices for each 
                 ancestry group. If False, returns the unmasked genotype matrix.
-            - variants_id (list of list): 
-                A list where each entry contains the SNP identifiers (rs IDs) for a given array.
-            - haplotypes (list of np.ndarray): 
-                A list where each entry contains individual IDs for the corresponding array.
+            - variants_id (list of str): 
+                Unique identifiers (IDs) for each SNP, potentially reduced if there are SNPs not present in the `laiboj`.
+                The format will depend on `rsid_or_chrompos`.
+            - haplotypes (list of str): 
+                Unique sample identifiers in the masked arrays.
     """
-    # Obtain number of unique ancestries in LocalAncestryObject
-    n_ancestries = laiobj.n_ancestries
-
+    # Obtain the masked genotype matrices, SNP identifiers, and haplotype identifiers
     logging.info("------ Array Processing: ------")
     masks, haplotypes, variants_id = get_masked_matrix(
         snpobj, 
         laiobj,
         is_masked,
-        n_ancestries, 
         average_strands, 
         rsid_or_chrompos
     )
 
     if average_strands:
+        # Remove duplicate haplotype identifiers (A/B labels)
         haplotypes = remove_AB_indIDs(haplotypes)
-        
+    
     return masks, variants_id, haplotypes
 
 
