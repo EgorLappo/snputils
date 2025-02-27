@@ -131,7 +131,7 @@ class mdPCA:
         self.__haplotypes_ = None  # Store haplotypes of X_new_ (after filtering if min_percent_snps > 0)
         self.__samples_ = None  # Store samples of X_new_ (after filtering if min_percent_snps > 0)
         self.__variants_id_ = None  # Store variants ID (after filtering SNPs not in laiobj)
-        self.__variant
+        self.__variant = None
 
         # Fit and transform if a `snpobj`, `laiobj`, `labels_file`, and `ancestry` are provided
         if self.snpobj is not None and self.laiobj is not None and self.labels_file is not None and self.ancestry is not None:
@@ -598,9 +598,9 @@ class mdPCA:
         return copy.copy(self)
 
     def _process_masks(self, masks, rs_ID_list, ind_ID_list):
-        masked_matrix = masks[0][self.ancestry].T
-        rs_IDs = rs_ID_list[0]
-        ind_IDs = ind_ID_list[0]
+        masked_matrix = masks[self.ancestry].T
+        rs_IDs = rs_ID_list
+        ind_IDs = ind_ID_list
         return masked_matrix, rs_IDs, ind_IDs
 
     def _load_mask_file(self):
@@ -973,11 +973,10 @@ class mdPCA:
             average_strands = self.average_strands
         
         if self.load_masks:
-            # If `load_masks` is True, load precomputed ancestry-based masked genotype matrixes, SNP identifiers, 
-            # haplotype identifiers, and weights from the specified `masks_file`
+            # Load precomputed ancestry-based masked genotype matrixes, SNP identifiers, haplotype identifiers, and weights
             masks, variants_id, haplotypes, _, weights = self._load_mask_file()
         else:
-            # Compute ancestry-based masked genotype matrixes, SNP identifiers, and individual IDs
+            # Obtain ancestry-based masked genotype matrixes, SNP identifiers, and haplotype identifiers
             masks, variants_id, haplotypes = array_process(
                 self.snpobj,
                 self.laiobj,
