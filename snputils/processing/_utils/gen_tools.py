@@ -578,7 +578,7 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
     return masked_matrices, ind_IDs, variants_id, rs_ID_dict
 
 
-def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_or_chrompos, num_arrays=1): 
+def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, num_arrays=1): 
     """                                                                                       
     Dataset processing of each of the individual arrays.                                               
                                                                                                
@@ -598,8 +598,6 @@ def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_
     num_ancestries   : Number of unique ancestries in dataset. 
     average_strands  : boolean
                        Indicates whether to combine haplotypes for each individual.
-    prob_thresh      : float  
-                       Probability threshold for ancestry assignment.
     is_masked        : boolean
                        indicates if output matrix needs to be masked. 
     save_masks       : boolean

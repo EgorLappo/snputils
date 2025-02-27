@@ -973,7 +973,6 @@ class mdPCA:
                 self.snpobj,
                 self.laiobj,
                 self.average_strands,
-                self.prob_thresh,
                 self.is_masked,
                 self.rsid_or_chrompos
             )
