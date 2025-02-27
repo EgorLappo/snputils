@@ -442,7 +442,7 @@ def average_parent_snps(masked_ancestry_matrix):
 
 
 def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands = False):
-    """                                                                                       
+    """
     Mask genotype data based on ancestry labels.
 
     This function applies ancestry-based masking to a genomic matrix, selectively retaining genotype 
@@ -500,71 +500,69 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
     return masked_matrices
 
 
-def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_msptsv,
-                      is_mixed, is_masked, num_ancestries, average_strands, rs_ID_dict, rsid_or_chrompos):
+def get_masked_matrix(
+        snpobj, 
+        laiobj, 
+        vit_or_fbk_or_fbtsv_or_msptsv,
+        is_mixed, 
+        is_masked, 
+        num_ancestries, 
+        average_strands, 
+        rs_ID_dict, 
+        rsid_or_chrompos
+    ):
     """                                                                                       
-    Input Parameter Parser                                                
-                                                                                               
-    Parameters                                                                                
-    ----------       
-    snpobj : string with the path of our beagle/vcf file.  
-    beagle_or_vcf       : int
-                          indicates file type 1=beagle, 2=vcf
-                          
-    vit_fbk_tsv_filename: string with the path of our vit/fbk/tsv file.
-    vit_or_fbk_or_tsv   : int
-                          indicates file type 1=vit, 2=fbk, 3=tsv
-    fb_or_msp           : int
-                          indicates 1=fb, 2=msp
-    is_masked           : boolean
-                          indicates if output matrix needs to be masked.
-    num_ancestries      : int
-                          number of distinct ancestries in dataset
-    average_strands     : boolean
-                          indicates whether to combine haplotypes for each individuals.
-    prob_thresh         : float  
-                          probability threshold for ancestry assignment.
-    rs_ID_dict          : dictionary showing the previous encoding for a specific 
-                          rs ID.
+    Generate masked or unmasked genetic matrices based on ancestry data.
 
-    Returns                                                                                   
-    -------   
-    masked_matrices  : (m, n)/(m, n, num_ancestries) array/dictionary
-                       unmasked matrix/masked matrices for each of the distinct ancestries in the 
-                       dataset.
-    ind_IDs          : (n,) array
-                       Individual IDs for all individuals in the matrix. 
-    variants_id           : (m,) array
-                       rs IDs of all the positions included in our matrix. 
-    rs_ID_dict       :
-                       Encoding dictionary for each of the positions in dataset.             
+    This function processes genetic data from Beagle or VCF files, applies ancestry-based masking 
+    if required, and returns genotype matrices along with individual and variant identifiers.
+
+    Args:
+        snpobj (str): 
+            A SNPObject instance.
+        laiobj: 
+            Local ancestry inference object, used for ancestry-based masking.
+        vit_or_fbk_or_fbtsv_or_msptsv (int): 
+            Indicator for ancestry file type (1 = vit, 2 = fbk, 3 = fbtsv, 4 = msptsv).
+        is_mixed (bool): 
+            Whether the ancestry inference method allows for mixed ancestry representations.
+        is_masked (bool): 
+            Whether ancestry-based masking should be applied.
+        num_ancestries (int): 
+            Number of unique ancestry groups in the dataset.
+        average_strands (bool): 
+            Whether to average haplotype data for each individual.
+        rs_ID_dict (dict): 
+            Dictionary mapping SNP identifiers to previous encodings.
+        rsid_or_chrompos: 
+            Specifies whether to use RS IDs or chromosome-position identifiers.
+
+    Returns:
+        tuple:
+            - masked_matrices (dict or np.ndarray): 
+                If `is_masked` is True, returns a dictionary containing masked genotype matrices for each 
+                ancestry group. If False, returns the unmasked genotype matrix.
+            - ind_IDs (np.ndarray): 
+                Array containing individual IDs for all individuals in the dataset.
+            - variants_id (np.ndarray): 
+                Array containing SNP identifiers (rs IDs) for all positions in the dataset.
+            - rs_ID_dict (dict): 
+                Updated mapping of SNP identifiers to encoded positions.
     """
-    if beagle_or_vcf == 1:
-        calldata_gt, ind_IDs, variants_id, rs_ID_dict = process_beagle(snpobj, rs_ID_dict, rsid_or_chrompos)
-    elif beagle_or_vcf == 2:
-        calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict = process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos)
+    calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict = process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos)
         
-    if is_masked and vit_or_fbk_or_fbtsv_or_msptsv != 0:
-        
+    if is_masked:
         ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
-
-        if vit_or_fbk_or_fbtsv_or_msptsv == 1 or vit_or_fbk_or_fbtsv_or_msptsv == 2:
-            unique_ancestries = [str(i) for i in np.arange(1, num_ancestries+1)]
-        else:
-            unique_ancestries = [str(i) for i in np.arange(0, num_ancestries)]
-        if is_mixed:
-            ancestry_int_list = [str(i) for i in np.arange(0, num_ancestries)]
-        else:
-            ancestry_int_list = unique_ancestries
+        unique_ancestries = [str(i) for i in np.arange(0, num_ancestries)]
+        ancestry_int_list = unique_ancestries
         masked_matrices = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
     
     else:
         if not is_masked:
             ancestry_int_list = [str(i) for i in np.arange(1, num_ancestries+1)]
-        elif is_mixed or beagle_or_vcf == 2:
-            ancestry_int_list = [str(i) for i in np.arange(0, num_ancestries)]
         else:
-            ancestry_int_list = [str(i) for i in np.arange(1, num_ancestries+1)]
+            ancestry_int_list = [str(i) for i in np.arange(0, num_ancestries)]
+
         masked_matrices = {}
         if average_strands:
             calldata_gt_avg = average_parent_snps(calldata_gt)
@@ -588,8 +586,6 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
                        Beagle/VCF Filename defined by user.
     vit_fbk_tsv_file : string
                        Viterbi/TSV/FBK Filename defined by user.
-    beagle_or_vcf    : int
-                       indicates file type 1=beagle, 2=vcf
     vit_or_fbk_or_tsv: int
                        indicates file type 1=vit, 2=fbk, 3=tsv
     fb_or_msp        : int
@@ -615,13 +611,9 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
                  List of individual IDs for each of the processed arrays.
 
     """
-    beagle_or_vcf_list = [2]
     vit_or_fbk_or_fbtsv_or_msptsv_list = [4]
 
-    if (1 in beagle_or_vcf_list) and (2 in beagle_or_vcf_list):
-        is_mixed = True
-    else:
-        is_mixed = False
+    is_mixed = False
 
     # Initialization:
     rs_ID_dict = {}
@@ -634,7 +626,7 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
 
     for i in range(num_arrays):
         logging.info("------ Array "+ str(i+1) + " Processing: ------")
-        genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(snpobj, beagle_or_vcf_list[i],
+        genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(snpobj, 
                                                                        laiobj,
                                                                        vit_or_fbk_or_fbtsv_or_msptsv_list[i], is_mixed, is_masked,
                                                                        num_ancestries, average_strands, rs_ID_dict,
