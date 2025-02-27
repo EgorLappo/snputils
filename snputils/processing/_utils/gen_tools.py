@@ -181,9 +181,9 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, variants_pos, calldata
     return ancestry_matrix, calldata_gt, variants_id
 
 
-def process_tsv_msp(laiobj, variants_pos, variants_chrom, calldata_gt, variants_id):
+def process_laiobj(laiobj, variants_pos, variants_chrom, calldata_gt, variants_id):
     """                                                                                       
-    Process the TSV/MSP file to extract ancestry information.
+    Process the LocalAncestryObject to extract ancestry information.
 
     This function processes a LocalAncestryObject containing ancestry segment data. 
     It aligns the ancestry data with the provided genomic positions and 
@@ -493,7 +493,7 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
         
     if is_masked and vit_or_fbk_or_fbtsv_or_msptsv != 0:
         
-        ancestry_matrix, calldata_gt, variants_id = process_tsv_msp(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
+        ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
 
         if vit_or_fbk_or_fbtsv_or_msptsv == 1 or vit_or_fbk_or_fbtsv_or_msptsv == 2:
             unique_ancestries = [str(i) for i in np.arange(1, num_ancestries+1)]
