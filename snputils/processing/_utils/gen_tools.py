@@ -324,31 +324,43 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
 
 def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     """                                                                                       
-    VCF File Processing                                                 
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    snpobj    : string with the path of our vcf file. 
-    rs_ID_dict  : dictionary showing the previous encoding for a specific 
-                  rs ID.
+    Process a VCF file to extract genotype and variant information.
 
-    Returns                                                                                   
-    -------   
-    calldata_gt.  : (m, n) array
-                  Genetic matrix indicating the encoding for individual n at 
-                  poisition m. 
-    ind_IDs     : (n,) array
-                  Individual IDs for all individuals in the matrix. 
-    variants_id      : (m,) array
-                  rs IDs of all the positions included in our matrix. 
-    positions   :  
-    rs_ID_dict  : dictionary showing the previous encoding for a specific 
-                  rs ID.
+    This function processes a VCF file to extract genotypic data, reformat variant identifiers, 
+    and encode genetic information into a structured genotype matrix.
+
+    Args:
+        snpobj (dict): 
+            A SNPObject instance.
+        rs_ID_dict (dict): 
+            A dictionary mapping rsIDs or variant positions to their reference alleles.
+            If an rsID is not found in the dictionary, it will be added.
+        rsid_or_chrompos (int): 
+            Format specification for variant identifiers:
+            - `1`: Use rsID format.
+            - `2`: Use Chromosome_Position format.
+
+    Returns:
+        Tuple:
+            - np.ndarray of shape (n_snps, n_samples * ploidy): 
+                A genotype matrix where `n_snps` represents the number of genomic 
+                positions and `n_samples * ploidy` represents the flattened genotype calls 
+                for diploid individuals.
+            - np.ndarray of shape (n_samples * ploidy,): 
+                Array of individual IDs corresponding to the genotype matrix.
+            - list of int or float: 
+                List of variant identifiers, formatted based on `rsid_or_chrompos` selection.
+            - list of int: 
+                List of genomic positions corresponding to the variants.
+            - dict: 
+                Updated reference allele dictionary mapping variant identifiers to reference alleles.
     """
     start_time = time.time()
-    gt = snpobj['calldata_gt']
-    n_variants, n_samples, ploidy = gt.shape
-    calldata_gt = gt.reshape(n_variants, n_samples * ploidy).astype(np.float16)
+
+    # Extract genotype data and reshape to 2D (n_snps, n_samples * ploidy)
+    calldata_gt = snpobj['calldata_gt']
+    n_snps, n_samples, ploidy = calldata_gt.shape
+    calldata_gt = calldata_gt.reshape(n_snps, n_samples * ploidy).astype(np.float16)
     np.place(calldata_gt, calldata_gt < 0, np.nan)
     if rsid_or_chrompos == 1:
         IDs = snpobj['variants_id']
