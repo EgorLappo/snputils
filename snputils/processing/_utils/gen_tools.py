@@ -185,9 +185,9 @@ def process_tsv_msp(laiobj, variants_pos, variants_chrom, calldata_gt, variants_
     """                                                                                       
     Process the TSV/MSP file to extract ancestry information.
 
-    This function processes a TSV-formatted Local Ancestry Inference (LAI) object 
-    containing ancestry segment data. It aligns the ancestry data with the provided 
-    genomic positions and assigns ancestry labels accordingly.
+    This function processes a LocalAncestryObject containing ancestry segment data. 
+    It aligns the ancestry data with the provided genomic positions and 
+    assigns ancestry labels accordingly.
 
     Args:
         laiobj (dict): 
@@ -214,26 +214,37 @@ def process_tsv_msp(laiobj, variants_pos, variants_chrom, calldata_gt, variants_
     """
     start_time = time.time()
     
+    # Extract start and end positions of ancestry segments
     tsv_spos = laiobj['physical_pos'][:,0].tolist()
     tsv_epos = laiobj['physical_pos'][:,1].tolist()
+    
+    # Extract ancestry matrix from LAI object
     tsv_matrix = laiobj['lai']
 
+    # Determine index range for matching positions
     i_start = variants_pos.index(tsv_spos[0])
     if tsv_epos[-1] in variants_pos:
         i_end = variants_pos.index(tsv_epos[-1])
     else:
         i_end = len(variants_pos)
     
+    # Update genotype matrix and associated metadata
     calldata_gt = calldata_gt[i_start:i_end, :]
     variants_pos = variants_pos[i_start:i_end]
     variants_id = variants_id[i_start:i_end]
 
+    # Extract chromosome information from LAI object
     tsv_chromosomes = laiobj['chromosomes']
+
+     # Initialize ancestry matrix
     ancestry_matrix = np.zeros((len(variants_pos), tsv_matrix.shape[1]), dtype=np.int8)
+
+    # Variables for iterating through ancestry data
     i_tsv = -1
     next_pos_tsv = tsv_spos[i_tsv+1]
     next_chrom_tsv = tsv_chromosomes[i_tsv+1]
 
+    # Assign ancestry based on genomic position and chromosome alignment
     for i, pos in enumerate(variants_pos):
         if pos >= next_pos_tsv and int(variants_chrom[i]) == int(next_chrom_tsv) and i_tsv + 1 < tsv_matrix.shape[0]:
             i_tsv += 1
@@ -244,6 +255,7 @@ def process_tsv_msp(laiobj, variants_pos, variants_chrom, calldata_gt, variants_
 
         ancestry_matrix[i, :] = ancs
 
+    # Convert ancestry matrix to string format
     ancestry_matrix = ancestry_matrix.astype(str)
     
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
