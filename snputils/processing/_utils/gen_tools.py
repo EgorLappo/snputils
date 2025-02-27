@@ -361,7 +361,11 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     calldata_gt = snpobj['calldata_gt']
     n_snps, n_samples, ploidy = calldata_gt.shape
     calldata_gt = calldata_gt.reshape(n_snps, n_samples * ploidy).astype(np.float16)
+
+    # Replace missing genotype values (-1) with NaN
     np.place(calldata_gt, calldata_gt < 0, np.nan)
+
+    # Extract variant identifiers based on rsID format selection
     if rsid_or_chrompos == 1:
         IDs = snpobj['variants_id']
         variants_id = [int(x[2:]) for x in IDs]
@@ -371,13 +375,14 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
             variants_id.append(np.float64(snpobj['variants_chrom'][i] + '.' + str(snpobj['variants_pos'][i])[::-1]))
     else:
         sys.exit("Illegal value for rsid_or_chrompos. Choose 1 for rsID format or 2 for Chromosome_position format.")
+
+    # Extract reference alleles and individual sample IDs
     ref_vcf = snpobj['variants_ref']
     samples = snpobj['samples']
-    ind_IDs = []
-    for sample in samples:
-        ind_IDs.append(sample + '_A')
-        ind_IDs.append(sample + '_B')
-    ind_IDs = np.array(ind_IDs)
+
+    # Generate individual IDs for diploid samples
+    ind_IDs = np.array([f"{sample}_{suffix}" for sample in samples for suffix in ["A", "B"]])
+    
     positions = snpobj['variants_pos'].tolist()
     
     processed_IDs = rs_ID_dict.keys()
