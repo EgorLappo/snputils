@@ -6,7 +6,7 @@ from typing import Optional, Dict, List, Union
 from snputils.snp.genobj.snpobj import SNPObject
 from snputils.ancestry.genobj.local import LocalAncestryObject
 from ._utils.mds_distance import distance_mat, mds_transform
-from ._utils.gen_tools import get_masked_matrix, process_labels_weights
+from ._utils.gen_tools import process_calldata_gt, process_labels_weights
 
 
 class maasMDS:
@@ -493,12 +493,12 @@ class maasMDS:
     @staticmethod
     def _load_masks_file(masks_file):
         mask_files = np.load(masks_file, allow_pickle=True)
-        masks = mask_files['masks']
+        mask = mask_files['mask']
         rs_ID_list = mask_files['rs_ID_list']
         ind_ID_list = mask_files['ind_ID_list']
         groups = mask_files['labels']
         weights = mask_files['weights']
-        return masks, rs_ID_list, ind_ID_list, groups, weights
+        return mask, rs_ID_list, ind_ID_list, groups, weights
 
     def fit_transform(
             self,
@@ -545,19 +545,20 @@ class maasMDS:
         if not self.is_masked:
             self.ancestry = '1'
         if self.load_masks:
-            masks, rs_ID_list, ind_ID_list, groups, weights = self._load_masks_file(self.masks_file)
+            mask, rs_ID_list, ind_ID_list, groups, weights = self._load_masks_file(self.masks_file)
         else:
-            masks, rs_ID_list, ind_ID_list = get_masked_matrix(
+            mask, rs_ID_list, ind_ID_list = process_calldata_gt(
                 self.snpobj,
                 self.laiobj,
+                self.ancestry,
                 self.average_strands,
                 self.is_masked, 
                 self.rsid_or_chrompos
             )
 
-            masks, ind_ID_list, groups, weights = process_labels_weights(
+            mask, ind_ID_list, groups, weights = process_labels_weights(
                 self.labels_file, 
-                masks, 
+                mask, 
                 rs_ID_list,
                 ind_ID_list, 
                 self.average_strands, 
@@ -569,7 +570,7 @@ class maasMDS:
                 self.masks_file
             )
         
-        distance_list = [[distance_mat(first=masks[self.ancestry], dist_func=self.distance_type)]]
+        distance_list = [[distance_mat(first=mask[self.ancestry], dist_func=self.distance_type)]]
         
         self.X_new_ = mds_transform(distance_list, groups, weights, ind_ID_list, self.n_components)
         self.haplotypes_ = ind_ID_list

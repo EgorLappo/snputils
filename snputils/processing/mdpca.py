@@ -11,7 +11,7 @@ from sklearn.decomposition import TruncatedSVD
 
 from snputils.snp.genobj.snpobj import SNPObject
 from snputils.ancestry.genobj.local import LocalAncestryObject
-from ._utils.gen_tools import get_masked_matrix, process_labels_weights
+from ._utils.gen_tools import process_calldata_gt, process_labels_weights
 from ._utils.iterative_svd import IterativeSVD
 
 
@@ -34,7 +34,7 @@ class mdPCA:
         is_masked: bool = True,
         average_strands: bool = False,
         is_weighted: bool = False,
-        groups_to_remove: Dict[int, List[str]] = {},
+        groups_to_remove: List[str] = None,
         min_percent_snps: float = 4,
         save_masks: bool = False,
         load_masks: bool = False,
@@ -84,10 +84,8 @@ class mdPCA:
                 True if the haplotypes from the two parents are to be combined (averaged) for each individual, or False otherwise.
             is_weighted (bool, default=False): 
                 True if weights are provided in the labels file, or False otherwise.
-            groups_to_remove (dict of int to list of str, default={}): 
-                Dictionary specifying groups to exclude from analysis. Keys are array numbers, and values are 
-                lists of groups to remove for each array.
-                Example: `{1: ['group1', 'group2'], 2: [], 3: ['group3']}`.
+            groups_to_remove (list of str, optional): 
+                List with groups to exclude from analysis. Example: ['group1', 'group2'].
             min_percent_snps (float, default=4): 
                 Minimum percentage of SNPs that must be known for an individual to be included in the analysis.
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
@@ -131,7 +129,6 @@ class mdPCA:
         self.__haplotypes_ = None  # Store haplotypes of X_new_ (after filtering if min_percent_snps > 0)
         self.__samples_ = None  # Store samples of X_new_ (after filtering if min_percent_snps > 0)
         self.__variants_id_ = None  # Store variants ID (after filtering SNPs not in laiobj)
-        self.__variant = None
 
         # Fit and transform if a `snpobj`, `laiobj`, `labels_file`, and `ancestry` are provided
         if self.snpobj is not None and self.laiobj is not None and self.labels_file is not None and self.ancestry is not None:
@@ -597,23 +594,17 @@ class mdPCA:
         """
         return copy.copy(self)
 
-    def _process_masks(self, masks, rs_ID_list, ind_ID_list):
-        masked_matrix = masks[self.ancestry].T
-        rs_IDs = rs_ID_list
-        ind_IDs = ind_ID_list
-        return masked_matrix, rs_IDs, ind_IDs
-
     def _load_mask_file(self):
         """
         Load previously saved masked genotype data from an `.npz` file.
         """
         mask_files = np.load(self.masks_file, allow_pickle=True)
-        masks = mask_files['masks']
+        mask = mask_files['mask']
         rs_ID_list = mask_files['rs_ID_list']
         ind_ID_list = mask_files['ind_ID_list']
         labels = mask_files['labels']
         weights = mask_files['weights']
-        return masks, rs_ID_list, ind_ID_list, labels, weights
+        return mask, rs_ID_list, ind_ID_list, labels, weights
 
     @staticmethod
     def _compute_strength_vector(X):
@@ -973,21 +964,25 @@ class mdPCA:
             average_strands = self.average_strands
         
         if self.load_masks:
-            # Load precomputed ancestry-based masked genotype matrixes, SNP identifiers, haplotype identifiers, and weights
-            masks, variants_id, haplotypes, _, weights = self._load_mask_file()
+            # Load precomputed ancestry-based masked genotype matrix, SNP identifiers, haplotype identifiers, and weights
+            mask, variants_id, haplotypes, _, weights = self._load_mask_file()
         else:
-            # Obtain ancestry-based masked genotype matrixes, SNP identifiers, and haplotype identifiers
-            masks, variants_id, haplotypes = get_masked_matrix(
+            # Process genotype data with optional ancestry-based masking and return the corresponding SNP and individual identifiers
+            mask, variants_id, haplotypes = process_calldata_gt(
                 self.snpobj,
                 self.laiobj,
+                self.ancestry,
                 self.average_strands,
                 self.is_masked,
                 self.rsid_or_chrompos
             )
 
-            masks, haplotypes, _, weights = process_labels_weights(
+            # Process individual genomic labels and weights, aligning them with a masked genotype matrix by 
+            # filtering out low-coverage individuals, reordering data to match the matrix structure, and 
+            # handling group-based adjustments
+            mask, haplotypes, _, weights = process_labels_weights(
                 self.labels_file,
-                masks,
+                mask,
                 variants_id,
                 haplotypes,
                 self.average_strands,
@@ -999,11 +994,9 @@ class mdPCA:
                 self.masks_file
             )
 
-        X_incomplete, _, _ = self._process_masks(masks, variants_id, haplotypes)
-
         # Call run_cov_matrix with the specified method
         self.X_new_ = self._run_cov_matrix(
-            X_incomplete,
+            mask[self.ancestry].T,
             weights
         )
 

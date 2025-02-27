@@ -428,12 +428,13 @@ def average_parent_snps(masked_ancestry_matrix):
     return new_matrix
 
 
-def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands = False):
+def mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands=False):
     """
-    Mask genotype data based on ancestry labels.
+    Mask the genotype matrix by retaining only the entries that match a given ancestry.
 
-    This function applies ancestry-based masking to a genomic matrix, selectively retaining genotype 
-    data for individual haplotypes based on their assigned ancestry.
+    This function processes a genotype matrix by masking SNP-haplotype values based on a 
+    specified ancestry. Genotype values corresponding to other ancestries are replaced with NaN. 
+    Optionally, the function averages the SNP values across haplotypes for each individual.
 
     Args:
         ancestry_matrix (np.ndarray of shape (n_snps, n_haplotypes)): 
@@ -441,61 +442,107 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
             `n_haplotypes` represents the number of haplotypes.
         calldata_gt (np.ndarray of shape (n_snps, n_haplotypes)): 
             Genetic matrix encoding the genotype information for haplotypes.
-        unique_ancestries (list): 
-            List of distinct ancestries present in the dataset (e.g., ['0', '1', '2']).
-        ancestry_int_list (list): 
-            List of ancestry identifiers (e.g., ['0', '1', '2']).
-        average_strands (bool, optional): 
-            Whether to average haplotypes for each individual. Defaults to `False`.
+        ancestry (str): 
+            Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
+        average_strands (bool, default=False): 
+            Whether to average haplotypes for each individual. Default is `False`.
 
     Returns:
-        dict: 
-            Dictionary containing masked genetic matrices for each ancestry group.
+        - mask (dict of str to np.ndarray): 
+            A dictionary where key represent ancestry identifiers, and values are the corresponding genotype matrices.  
+            The matrices contain only genotype data for the specified ancestry, with all other ancestries set to NaN.
     """
     start_time = time.time()
 
-    # Dictionary to store masked matrices for each ancestry group
-    masked_matrices = {}
+    # Dictionary to store the masked genotype matrix for the target ancestry
+    mask = {}
 
-    # Iterate through each unique ancestry
-    for i in range(len(unique_ancestries)):
-        # Get the ancestry identifier
-        ancestry = unique_ancestries[i] 
-        # Get the corresponding dictionary key
-        dict_ancestry = ancestry_int_list[i]
+    # Initialize a flat array with NaN values to store masked genotype data
+    masked = np.empty(ancestry_matrix.size, dtype=np.float16)
+    masked[:] = np.nan  # Default to NaN for all positions
 
-        # Initialize an empty masked array with NaN values
-        masked = np.empty(ancestry_matrix.shape[0] * ancestry_matrix.shape[1], dtype = np.float16)
-        masked[:] = np.nan
+    # Identify positions in ancestry_matrix where ancestry matches the specified target
+    matching_indices = ancestry_matrix.ravel() == ancestry
 
-        # Identify positions in the ancestry matrix that match the current ancestry
-        arg = ancestry_matrix.reshape(-1) == ancestry
+    # Retain genotype data only for the matched ancestry positions
+    masked[matching_indices] = calldata_gt.ravel()[matching_indices]
 
-        # Apply masking: retain genotype data only for the matched ancestry
-        masked[arg] = calldata_gt.reshape(-1)[arg]
-        logging.info("Masking for ancestry " + str(ancestry) + " --- %s seconds ---" % (time.time() - start_time))
+    # Log the time taken for the masking operation
+    logging.info(f"Masking for ancestry {ancestry} --- {time.time() - start_time:.4f} seconds")
 
-        # If averaging strands is enabled, average the SNPs for each individual
-        if (average_strands == True):
-            masked_matrices[dict_ancestry] = average_parent_snps(masked.reshape(ancestry_matrix.shape).astype(np.float16))    
-        else:
-            # Otherwise, store the masked matrix as is
-            masked_matrices[dict_ancestry] = masked.reshape(ancestry_matrix.shape).astype(np.float16)
+    # Reshape the masked array back to its original 2D form
+    masked_matrix = masked.reshape(ancestry_matrix.shape).astype(np.float16)
 
-        start_time = time.time()
+    # If averaging strands is enabled, compute the average SNP values per individual
+    if average_strands:
+        mask[ancestry] = average_parent_snps(masked_matrix)
+    else:
+        mask[ancestry] = masked_matrix  # Store the masked matrix as is
 
-    return masked_matrices
+    return mask
 
 
-def get_masked_matrix(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos): 
+def remove_AB_indIDs(ind_IDs):
+    """
+    Removes A/B labels from individual (haplotype) identifiers.
+
+    This function assumes that the input list contains alternating identifiers
+    (e.g., ['ID1_A', 'ID1_B', 'ID2_A', 'ID2_B', ...]) and extracts only 
+    the base identifier (e.g., ['ID1', 'ID2', ...]), effectively halving the list.
+
+    Args:
+        ind_IDs (list or array): List of individual identifiers with '_A' and '_B' suffixes.
+
+    Returns:
+        np.array: Array of unique individual identifiers without A/B labels.
+    """
+    new_ind_IDs = []
+    for i in range(int(len(ind_IDs)/2)):
+        new_ind_IDs.append(ind_IDs[2*i][:-2])
+    new_ind_IDs = np.array(new_ind_IDs)
+    return new_ind_IDs
+
+
+def add_AB_indIDs(ind_IDs):
+    """
+    Expands individual (haplotype) identifiers by adding A/B labels.
+
+    This function duplicates each identifier by appending '_A' and '_B' suffixes,
+    assuming each individual has two haplotypes.
+
+    Args:
+        ind_IDs (list or array): List of base individual identifiers (e.g., ['ID1', 'ID2', ...]).
+
+    Returns:
+        np.array: Array where each identifier is expanded into two haplotypes (e.g., ['ID1_A', 'ID1_B', 'ID2_A', 'ID2_B', ...]).
+    """
+    new_ind_IDs = []
+    for i in range(len(ind_IDs)):
+        new_ind_IDs.append(str(ind_IDs[i]) + '_A')
+        new_ind_IDs.append(str(ind_IDs[i]) + '_B')
+    new_ind_IDs = np.array(new_ind_IDs)
+    return new_ind_IDs
+
+
+def process_calldata_gt(snpobj, laiobj, ancestry, average_strands, is_masked, rsid_or_chrompos): 
     """                                                                                       
-    Obtain ancestry-based masked genotype matrixes and correponding SNP identifiers and haplotype identifiers.
+    Process genotype data with optional ancestry-based masking and return the corresponding 
+    SNP and individual identifiers.
+
+    This function processes genotype data by restructuring it into a 2D matrix:
+    - If `average_strands=False`, the shape is `(n_snps, n_samples × 2)`, preserving haplotype data.
+    - If `average_strands=True`, the shape is `(n_snps, n_samples)`, averaging SNP values across haplotypes for each individual.
+
+    If `is_masked=True`, the function filters SNP-haplotype values based on the specified ancestry, 
+    replacing all other ancestry values with NaN.
 
     Args:
         snpobj (SNPObject): 
             A SNPObject instance.
         laiobj (LocalAncestryObject): 
             A LocalAncestryObject instance.
+        ancestry (str): 
+            Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
         average_strands (bool): 
             Whether to average haplotypes for each individual.
         is_masked (bool): 
@@ -508,112 +555,165 @@ def get_masked_matrix(snpobj, laiobj, average_strands, is_masked, rsid_or_chromp
 
     Returns:
         tuple:
-            - masks (np.ndarray): 
-                If `is_masked` is True, returns a dictionary containing masked genotype matrices for each 
-                ancestry group. If False, returns the unmasked genotype matrix.
+            - mask (dict of str to np.ndarray): 
+                A dictionary where key represents the ancestry identifier, and value is the corresponding genotype matrix.  
+                If `is_masked=True`, the matrix contains only genotype data for the specified ancestry, with all other ancestries set to NaN.  
+                If `is_masked=False`, the full, unmasked genotype matrix is returned.
             - variants_id (list of str): 
-                Unique identifiers (IDs) for each SNP, potentially reduced if there are SNPs not present in the `laiboj`.
-                The format will depend on `rsid_or_chrompos`.
+                A list of unique SNP identifiers in the specified format (`rsid_or_chrompos`).  
+                The list may be reduced if some SNPs are not present in the `laiobj`.
             - haplotypes (list of str): 
-                Unique sample identifiers in the masked arrays.
+                A list of unique individual sample identifiers.  
+                If haplotypes are averaged (`average_strands=True`), duplicate haplotype labels (e.g., "A" and "B") are removed.
     """
     # Obtain the masked genotype matrices, SNP identifiers, and haplotype identifiers
     logging.info("------ Array Processing: ------")
     
-    # Process the genetic variant data from a SNPObject, restructure genotype information, 
-    # format variant identifiers, and ensure consistency in allele encoding
+    # Extract genotype data, sample identifiers, variant identifiers, and positions from the SNPObject
     calldata_gt, haplotypes, variants_id, positions = process_snpobj(snpobj, rsid_or_chrompos)
-    
-    # Obtain number of unique ancestries in LocalAncestryObject
-    n_ancestries = laiobj.n_ancestries
 
     if is_masked:
-        # Obtain a 
-        # Process the LocalAncestryObject containing ancestry segment data
-        # Align the ancestry data with the provided genomic positions and assign ancestry labels accordingly
+        # Obtain a SNP-level ancestry matrix by matching genomic positions and chromosomes in the SNPObject 
+        # with ancestry segments in the LocalAncestryObject
         ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
-        unique_ancestries = [str(i) for i in np.arange(0, n_ancestries)]
-        ancestry_int_list = unique_ancestries
-        masks = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
-    
+        # Mask the genotype matrix by retaining only the entries that match a given ancestry
+        mask = mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands)
     else:
-        if not is_masked:
-            ancestry_int_list = [str(i) for i in np.arange(1, n_ancestries+1)]
-        else:
-            ancestry_int_list = [str(i) for i in np.arange(0, n_ancestries)]
-
-        masks = {}
+        # If averaging strands is enabled, compute the average SNP values per individual
         if average_strands:
-            calldata_gt_avg = average_parent_snps(calldata_gt)
-            for ancestry in ancestry_int_list:
-                masks[ancestry] = calldata_gt_avg
-        else:
-            for ancestry in ancestry_int_list:
-                masks[ancestry] = calldata_gt
+            calldata_gt = average_parent_snps(calldata_gt)
+        
+        # Store the unmasked genotype data in the mask dictionary
+        mask = {}
+        mask[ancestry] = calldata_gt
+
         logging.info("No masking")
 
     if average_strands:
-        # Remove duplicate haplotype identifiers (A/B labels)
+        # Remove duplicate haplotype identifiers (A/B strand labels)
         haplotypes = remove_AB_indIDs(haplotypes)
     
-    return masks, variants_id, haplotypes
+    return mask, variants_id, haplotypes
 
 
-def remove_AB_indIDs(ind_IDs):
-    new_ind_IDs = []
-    for i in range(int(len(ind_IDs)/2)):
-        new_ind_IDs.append(ind_IDs[2*i][:-2])
-    new_ind_IDs = np.array(new_ind_IDs)
-    return new_ind_IDs
+def process_labels_weights(
+        labels_file, 
+        mask, 
+        variants_id, 
+        haplotypes, 
+        average_strands, 
+        ancestry, 
+        min_percent_snps, 
+        groups_to_remove, 
+        is_weighted, 
+        save_masks, 
+        masks_file
+    ):
+    """
+    Process individual genomic labels and weights, aligning them with a masked genotype matrix by 
+    filtering out low-coverage individuals, reordering data to match the matrix structure, and 
+    handling group-based adjustments.
 
+    Steps:
+      1. Load label/weight data and convert 'indID' to string type.
+      2. Build a fast lookup dictionary for haplotype indices.
+      3. Handle strand averaging or duplication.
+      4. Align genotype matrix columns with the filtered/processed 'indID's.
+      5. Apply or default weights (if is_weighted).
+      6. Remove unwanted labels and individuals based on min_percent_snps.
+      7. Remove individuals with zero weight.
+      8. Combine individuals if 'combination' > 0, adding new columns in one step.
+      9. Update mask, haplotypes, labels, weights, and optionally save.
 
-def add_AB_indIDs(ind_IDs):
-    new_ind_IDs = []
-    for i in range(len(ind_IDs)):
-        new_ind_IDs.append(str(ind_IDs[i]) + '_A')
-        new_ind_IDs.append(str(ind_IDs[i]) + '_B')
-    new_ind_IDs = np.array(new_ind_IDs)
-    return new_ind_IDs
+    Args:
+        labels_file (str, optional): 
+            Path to the labels file in .tsv format. The first column, `indID`, contains the individual identifiers, and the second 
+            column, `label`, specifies the groups for all individuals. If `is_weighted=True`, a `weight` column with individual 
+            weights is required. Optionally, `combination` and `combination_weight` columns can specify sets of individuals to be 
+            combined into groups, with respective weights.
+        mask (dict of str to np.ndarray): 
+            A dictionary where key represents the ancestry identifier, and value is the corresponding genotype matrix.  
+            If `is_masked=True`, the matrix contains only genotype data for the specified ancestry, with all other ancestries set to NaN.  
+            If `is_masked=False`, the full, unmasked genotype matrix is returned.
+        variants_id (list of str): 
+            A list of unique SNP identifiers in the specified format (`rsid_or_chrompos`).  
+            The list may be reduced if some SNPs are not present in the `laiobj`.
+        haplotypes (list of str): 
+            A list of unique individual sample identifiers.  
+            If haplotypes are averaged (`average_strands=True`), duplicate haplotype labels (e.g., "A" and "B") are removed.
+        average_strands (bool): 
+            Whether to average haplotypes for each individual.
+        ancestry (str): 
+            Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
+        min_percent_snps (float): 
+            Minimum percentage of SNPs that must be known for an individual to be included in the analysis.
+            All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
+        groups_to_remove (list of str): 
+            List with groups to exclude from analysis. Example: ['group1', 'group2'].
+        is_weighted (bool): 
+            True if weights are provided in the labels file, or False otherwise.
+        save_masks (bool): 
+            True if the masked matrices are to be saved in a `.npz` file, or False otherwise.s
+        masks_file (str or pathlib.Path): 
+            Path to the `.npz` file used for saving/loading masked matrices.
 
-
-def process_labels_weights(labels_file, masks, variants_id, haplotypes, average_strands, ancestry, min_percent_snps, remove_labels_dict, is_weighted, save_masks, masks_file):
+    Returns:
+        tuple:  
+            - mask (dict of str to np.ndarray):  
+                A dictionary where key represents the ancestry identifier, and value is the corresponding genotype matrix.  
+                If `is_masked=True`, the matrix contains only genotype data for the specified ancestry, with all other ancestries set to NaN.  
+                If `is_masked=False`, the full, unmasked genotype matrix is returned.
+            - haplotypes (list of str):  
+                A list of unique individual sample identifiers after filtering.  
+                If haplotypes are averaged (`average_strands=True`), duplicate haplotype labels (e.g., "A" and "B") are removed.
+            - label_list (np.ndarray of str):  
+                A NumPy array containing the labels assigned to each individual after processing.  
+                The labels may be repeated or adjusted depending on strand averaging and filtering criteria.
+            - weight_list (np.ndarray of float):  
+                A NumPy array containing the weight assigned to each individual after processing.  
+                If `is_weighted=True`, weights are assigned based on the input file; otherwise, all weights default to 1.  
+                Individuals with zero weight are excluded from the final output.
+    """
+    # Load the labels file
     labels_df = pd.read_csv(labels_file, sep='\t')
     labels_df['indID'] = labels_df['indID'].astype(str)
-    label_list = []
-    weight_list = []
     
-    masked_matrix = masks[ancestry]
-    ind_IDs = haplotypes
     if average_strands:
-        labels = np.array(labels_df['label'][labels_df['indID'].isin(ind_IDs)])
-        label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(ind_IDs)])
+        # Keep IDs as-is and match them directly
+        labels = np.array(labels_df['label'][labels_df['indID'].isin(haplotypes)])
+        label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(haplotypes)])
     else:
-        temp_ind_IDs = remove_AB_indIDs(ind_IDs)
+        # Remove "A"/"B" suffixes for matching, then duplicate labels to cover both strands
+        temp_ind_IDs = remove_AB_indIDs(haplotypes)
         labels = np.array(labels_df['label'][labels_df['indID'].isin(temp_ind_IDs)])
         labels = np.repeat(labels, 2)
         label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(temp_ind_IDs)])
         label_ind_IDs = add_AB_indIDs(label_ind_IDs)
-    keep_indices = [ind_IDs.tolist().index(x) for x in label_ind_IDs]
-    masked_matrix = masked_matrix[:,keep_indices]
-    ind_IDs = ind_IDs[keep_indices]
-    array_num = 1
+        
+    # Align masked matrix columns with the order of label_ind_IDs
+    keep_indices = [haplotypes.tolist().index(x) for x in label_ind_IDs]
+    mask[ancestry] = mask[ancestry][:, keep_indices]
+    haplotypes = haplotypes[keep_indices]
+
+    # Initialize or retrieve weights and combinations
     if not is_weighted:
         weights = np.ones(len(labels))
         combinations = np.zeros(len(labels))
         combination_weights = np.zeros(len(labels))
     else:
         if average_strands:
-            weights = np.array(labels_df['weight'][labels_df['indID'].isin(ind_IDs)])
+            weights = np.array(labels_df['weight'][labels_df['indID'].isin(haplotypes)])
             if 'combination' in labels_df.columns:
-                combinations = np.array(labels_df['combination'][labels_df['indID'].isin(ind_IDs)])
+                combinations = np.array(labels_df['combination'][labels_df['indID'].isin(haplotypes)])
             else:
                 combinations = np.zeros(len(weights))
             if 'combination_weight' in labels_df.columns:
-                combination_weights = np.array(labels_df['combination_weight'][labels_df['indID'].isin(ind_IDs)])
+                combination_weights = np.array(labels_df['combination_weight'][labels_df['indID'].isin(haplotypes)])
             else:
                 combination_weights = np.ones(len(weights))
         else:
-            temp_ind_IDs = remove_AB_indIDs(ind_IDs)
+            temp_ind_IDs = remove_AB_indIDs(haplotypes)
+            # Retrieve once, then duplicate for A/B strands
             weights = np.array(labels_df['weight'][labels_df['indID'].isin(temp_ind_IDs)])
             weights = np.repeat(weights, 2)
             if 'combination' in labels_df.columns:
@@ -626,49 +726,55 @@ def process_labels_weights(labels_file, masks, variants_id, haplotypes, average_
                 combination_weights = np.repeat(combination_weights, 2)
             else:
                 combination_weights = np.ones(len(weights))
-    if array_num in remove_labels_dict:
-        remove_labels = remove_labels_dict[array_num]
+
+    # Remove specified groups by setting their weight to zero
+    if groups_to_remove:
         for i in range(len(labels)):
-            if labels[i] in remove_labels:
+            if labels[i] in groups_to_remove:
                 weights[i] = 0
-    percent_snps = 100 * (1 - np.mean(np.isnan(masked_matrix), axis=0))
+    
+    # Exclude individuals (columns) whose SNP coverage is below min_percent_snps
+    percent_snps = 100 * (1 - np.mean(np.isnan(mask[ancestry]), axis=0))
     keep_indices = np.argwhere(percent_snps >= min_percent_snps).flatten()
-    masked_matrix = masked_matrix[:,keep_indices]
-    ind_IDs = ind_IDs[keep_indices]
+    mask[ancestry] = mask[ancestry][:,keep_indices]
+    haplotypes = haplotypes[keep_indices]
     labels = labels[keep_indices]
     weights = weights[keep_indices]
     combinations = combinations[keep_indices]
     combination_weights = combination_weights[keep_indices]
+
+    # Exclude individuals with zero weight
     keep_indices = np.argwhere(weights > 0).flatten()
-    masked_matrix_new = masked_matrix[:,keep_indices]
-    ind_IDs_new = ind_IDs[keep_indices]
+    masked_matrix_new = mask[ancestry][:,keep_indices]
+    haplotypes_new = haplotypes[keep_indices]
     labels_new = labels[keep_indices]
     weights_new = weights[keep_indices]
+
+    # Identify and combine individuals that share the same "combination" > 0
     pos_combinations = sorted(set(combinations[combinations > 0]))
-    num_combinations = len(pos_combinations)
-    if num_combinations > 0:
-        for combination in pos_combinations:
-            combined_indices = np.argwhere(combinations == combination)
-            combined_col = np.nanmean(masked_matrix[:,combined_indices], axis=1)
-            masked_matrix_new = np.append(masked_matrix_new, combined_col, axis=1)
-            ind_IDs_new = np.append(ind_IDs_new, 'combined_ind_' + str(combination))
-            labels_new = np.append(labels_new, labels[combined_indices[0][0]])
-            weights_new = np.append(weights_new, combination_weights[combined_indices[0][0]])
-    masked_matrix = masked_matrix_new
-    ind_IDs = ind_IDs_new
+    for combination in pos_combinations:
+        combined_indices = np.argwhere(combinations == combination)
+        combined_col = np.nanmean(mask[ancestry][:,combined_indices], axis=1)
+        masked_matrix_new = np.append(masked_matrix_new, combined_col, axis=1)
+        haplotypes_new = np.append(haplotypes_new, 'combined_ind_' + str(combination))
+        labels_new = np.append(labels_new, labels[combined_indices[0][0]])
+        weights_new = np.append(weights_new, combination_weights[combined_indices[0][0]])
+    
+    # Update the mask for this ancestry and finalize outputs
+    mask[ancestry] = masked_matrix_new
+    haplotypes = haplotypes_new
     labels = labels_new
     weights = weights_new
-    masks[ancestry] = masked_matrix
-    haplotypes = ind_IDs
-    label_list += labels.tolist()
-    weight_list += weights.tolist()
-
-    label_list = np.array(label_list)
-    weight_list = np.array(weight_list)
+    haplotypes = haplotypes
+    label_list = np.array(labels)
+    weight_list = np.array(weights)
+    
+    # Optionally save the updated mask and accompanying arrays
     if save_masks:
-        np.savez_compressed(masks_file, masks=masks, variants_id=variants_id, haplotypes=haplotypes,
+        np.savez_compressed(masks_file, mask=mask, variants_id=variants_id, haplotypes=haplotypes,
                  labels=label_list, weights=weight_list, protocol=4)
-    return masks, haplotypes, label_list, weight_list
+    
+    return mask, haplotypes, label_list, weight_list
 
 
 def center_masked_matrix(masked_matrix):
