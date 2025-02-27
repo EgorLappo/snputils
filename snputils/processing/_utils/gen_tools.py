@@ -383,17 +383,17 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     # Generate individual IDs for diploid samples
     ind_IDs = np.array([f"{sample}_{suffix}" for sample in samples for suffix in ["A", "B"]])
     
+    # Extract variant positions
     positions = snpobj['variants_pos'].tolist()
     
-    processed_IDs = rs_ID_dict.keys()
-    for i in range(len(variants_id)):
-        rs_ID = variants_id[i]
-        if (rs_ID in processed_IDs):
-            ref = rs_ID_dict[rs_ID]
-        else:
-            ref = ref_vcf[i]
-            rs_ID_dict[rs_ID] = ref
-        if ref != ref_vcf[i]:
+    # Process reference allele encoding
+    for i, (rs_ID, ref_val) in enumerate(zip(variants_id, ref_vcf)):
+        # If rs_ID isn't in the dictionary, it is set to ref_val
+        # Otherwise, it returns the existing value.
+        ref = rs_ID_dict.setdefault(rs_ID, ref_val)
+
+        # Flip genotype encoding if reference allele differs from stored reference
+        if ref != ref_val:
             calldata_gt[i, :] = 1 - calldata_gt[i, :]
     
     logging.info("VCF Processing Time: --- %s seconds ---" % (time.time() - start_time))
