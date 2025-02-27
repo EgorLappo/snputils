@@ -25,7 +25,6 @@ class maasMDS:
             labels_file,
             ancestry,
             is_masked: bool = True,
-            prob_thresh: float = 0,
             average_strands: bool = False,
             is_weighted: bool = False,
             groups_to_remove: Dict[int, List[str]] = {},
@@ -52,8 +51,6 @@ class maasMDS:
                 Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
             is_masked (bool, default=True): 
                 True if an ancestry file is passed for ancestry-specific masking, or False otherwise.
-            prob_thresh (float, default=0.0): 
-                Minimum probability threshold for a SNP to belong to an ancestry.
             average_strands (bool, default=False): 
                 True if the haplotypes from the two parents are to be combined (averaged) for each individual, or False otherwise.
             is_weighted (bool, default=False): 
@@ -84,7 +81,6 @@ class maasMDS:
         self.__labels_file = labels_file
         self.__ancestry = ancestry
         self.__is_masked = is_masked
-        self.__prob_thresh = prob_thresh
         self.__average_strands = average_strands
         self.__groups_to_remove = groups_to_remove
         self.__min_percent_snps = min_percent_snps
@@ -218,23 +214,6 @@ class maasMDS:
         Update `is_masked`.
         """
         self.__is_masked = x
-
-    @property
-    def prob_thresh(self) -> float:
-        """
-        Retrieve `prob_thresh`.
-        
-        Returns:
-            **float:** Minimum probability threshold for a SNP to belong to an ancestry.
-        """
-        return self.__prob_thresh
-
-    @prob_thresh.setter
-    def prob_thresh(self, x: float) -> None:
-        """
-        Update `prob_thresh`.
-        """
-        self.__prob_thresh = x
 
     @property
     def average_strands(self) -> bool:
@@ -571,7 +550,6 @@ class maasMDS:
                 self.snpobj,
                 self.laiobj,
                 self.average_strands,
-                self.prob_thresh, 
                 self.is_masked, 
                 self.rsid_or_chrompos
             )
