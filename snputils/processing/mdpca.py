@@ -104,7 +104,7 @@ class mdPCA:
             n_components (int, default=2): 
                 The number of principal components.
             rsid_or_chrompos (int, default=2): 
-                Format indicator for SNP IDs in the SNP data. Use 1 for `rsID` format or 2 for `chromosome_position`.
+                Format indicator for SNP IDs in `self.__X_new_`. Use 1 for `rsID` format or 2 for `chromosome_position`.
             percent_vals_masked (float, default=0): 
                 Percentage of values in the covariance matrix to be masked and then imputed. Only applicable if `method` is 
                 `'cov_matrix_imputation'` or `'cov_matrix_imputation_ils'`.
@@ -128,8 +128,10 @@ class mdPCA:
         self.__rsid_or_chrompos = rsid_or_chrompos
         self.__percent_vals_masked = percent_vals_masked
         self.__X_new_ = None  # Store transformed SNP data
-        self.__haplotypes_ = None  # Store haplotypes after filtering if min_percent_snps > 0
-        self.__samples_ = None  # Store samples after filtering if min_percent_snps > 0
+        self.__haplotypes_ = None  # Store haplotypes of X_new_ (after filtering if min_percent_snps > 0)
+        self.__samples_ = None  # Store samples of X_new_ (after filtering if min_percent_snps > 0)
+        self.__variants_id_ = None  # Store variants ID (after filtering SNPs not in laiobj)
+        self.__variant
 
         # Fit and transform if a `snpobj`, `laiobj`, `labels_file`, and `ancestry` are provided
         if self.snpobj is not None and self.laiobj is not None and self.labels_file is not None and self.ancestry is not None:
@@ -542,6 +544,26 @@ class mdPCA:
             return [x[:-2] for x in haplotypes]
 
     @property
+    def variants_id_(self) -> Optional[np.ndarray]:
+        """
+        Retrieve `variants_id_`.
+
+        Returns:
+            **array of shape (n_snp,):** 
+                An array containing unique identifiers (IDs) for each SNP,
+                potentially reduced if there are SNPs not present in the `laiboj`.
+                The format will depend on `rsid_or_chrompos`.
+        """
+        return self.__variants_id_
+
+    @variants_id_.setter
+    def variants_id_(self, x: np.ndarray) -> None:
+        """
+        Update `variants_id_`.
+        """
+        self.__variants_id_ = x
+
+    @property
     def n_haplotypes(self) -> Optional[int]:
         """
         Retrieve `n_haplotypes`.
@@ -582,6 +604,9 @@ class mdPCA:
         return masked_matrix, rs_IDs, ind_IDs
 
     def _load_mask_file(self):
+        """
+        Load previously saved masked genotype data from an `.npz` file.
+        """
         mask_files = np.load(self.masks_file, allow_pickle=True)
         masks = mask_files['masks']
         rs_ID_list = mask_files['rs_ID_list']
@@ -948,9 +973,12 @@ class mdPCA:
             average_strands = self.average_strands
         
         if self.load_masks:
-            masks, rs_id_list, ind_id_list, _, weights = self._load_mask_file()
+            # If `load_masks` is True, load precomputed ancestry-based masked genotype matrixes, SNP identifiers, 
+            # haplotype identifiers, and weights from the specified `masks_file`
+            masks, variants_id, haplotypes, _, weights = self._load_mask_file()
         else:
-            masks, rs_id_list, ind_id_list = array_process(
+            # Compute ancestry-based masked genotype matrixes, SNP identifiers, and individual IDs
+            masks, variants_id, haplotypes = array_process(
                 self.snpobj,
                 self.laiobj,
                 self.average_strands,
@@ -958,11 +986,11 @@ class mdPCA:
                 self.rsid_or_chrompos
             )
 
-            masks, ind_id_list, _, weights = process_labels_weights(
+            masks, haplotypes, _, weights = process_labels_weights(
                 self.labels_file,
                 masks,
-                rs_id_list,
-                ind_id_list,
+                variants_id,
+                haplotypes,
                 self.average_strands,
                 self.ancestry,
                 self.min_percent_snps,
@@ -972,7 +1000,7 @@ class mdPCA:
                 self.masks_file
             )
 
-        X_incomplete, _, _ = self._process_masks(masks, rs_id_list, ind_id_list)
+        X_incomplete, _, _ = self._process_masks(masks, variants_id, haplotypes)
 
         # Call run_cov_matrix with the specified method
         self.X_new_ = self._run_cov_matrix(
@@ -980,6 +1008,7 @@ class mdPCA:
             weights
         )
 
-        self.haplotypes_ = ind_id_list
+        self.haplotypes_ = haplotypes
+        self.variants_id_ = variants_id
 
         return self.X_new_
