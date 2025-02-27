@@ -50,7 +50,8 @@ class maasMDS:
             ancestry (str, optional): 
                 Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
             is_masked (bool, default=True): 
-                True if an ancestry file is passed for ancestry-specific masking, or False otherwise.
+                If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
+                corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
             average_strands (bool, default=False): 
                 True if the haplotypes from the two parents are to be combined (averaged) for each individual, or False otherwise.
             is_weighted (bool, default=False): 
