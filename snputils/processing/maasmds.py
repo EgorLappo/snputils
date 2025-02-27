@@ -6,7 +6,7 @@ from typing import Optional, Dict, List, Union
 from snputils.snp.genobj.snpobj import SNPObject
 from snputils.ancestry.genobj.local import LocalAncestryObject
 from ._utils.mds_distance import distance_mat, mds_transform
-from ._utils.gen_tools import array_process, process_labels_weights
+from ._utils.gen_tools import get_masked_matrix, process_labels_weights
 
 
 class maasMDS:
@@ -547,7 +547,7 @@ class maasMDS:
         if self.load_masks:
             masks, rs_ID_list, ind_ID_list, groups, weights = self._load_masks_file(self.masks_file)
         else:
-            masks, rs_ID_list, ind_ID_list = array_process(
+            masks, rs_ID_list, ind_ID_list = get_masked_matrix(
                 self.snpobj,
                 self.laiobj,
                 self.average_strands,

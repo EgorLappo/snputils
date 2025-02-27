@@ -11,7 +11,7 @@ from sklearn.decomposition import TruncatedSVD
 
 from snputils.snp.genobj.snpobj import SNPObject
 from snputils.ancestry.genobj.local import LocalAncestryObject
-from ._utils.gen_tools import array_process, process_labels_weights
+from ._utils.gen_tools import get_masked_matrix, process_labels_weights
 from ._utils.iterative_svd import IterativeSVD
 
 
@@ -977,7 +977,7 @@ class mdPCA:
             masks, variants_id, haplotypes, _, weights = self._load_mask_file()
         else:
             # Obtain ancestry-based masked genotype matrixes, SNP identifiers, and haplotype identifiers
-            masks, variants_id, haplotypes = array_process(
+            masks, variants_id, haplotypes = get_masked_matrix(
                 self.snpobj,
                 self.laiobj,
                 self.average_strands,

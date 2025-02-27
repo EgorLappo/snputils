@@ -487,75 +487,7 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
     return masked_matrices
 
 
-def get_masked_matrix(
-        snpobj, 
-        laiobj, 
-        is_masked, 
-        average_strands, 
-        rsid_or_chrompos
-    ):
-    """
-    Args:
-        snpobj (SNPObject): 
-            A SNPObject instance.
-        laiobj (LocalAncestryObject): 
-            A LocalAncestryObject instance.
-        is_masked (bool): 
-            If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
-            corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
-        average_strands (bool): 
-            Whether to average haplotypes for each individual.
-        rsid_or_chrompos (int): 
-            Specifies the format of variant identifiers:
-            - `1`: rsID format (e.g., "rs12345").
-            - `2`: Uses Chromosome_Position format (e.g., "1.12345" for chromosome 1, position 12345).
-
-    Returns:
-        tuple:
-            - masks (dict or np.ndarray): 
-                If `is_masked` is True, returns a dictionary containing masked genotype matrices for each 
-                ancestry group. If False, returns the unmasked genotype matrix.
-            - ind_IDs (np.ndarray): 
-                Array containing individual IDs for all individuals in the dataset.
-            - variants_id (np.ndarray): 
-                Array containing SNP identifiers (rs IDs) for all positions in the dataset.
-    """
-    # Process the genetic variant data from a SNPObject, restructure genotype information, 
-    # format variant identifiers, and ensure consistency in allele encoding
-    calldata_gt, ind_IDs, variants_id, positions = process_snpobj(snpobj, rsid_or_chrompos)
-    
-    # Obtain number of unique ancestries in LocalAncestryObject
-    n_ancestries = laiobj.n_ancestries
-
-    if is_masked:
-        # Obtain a 
-        # Process the LocalAncestryObject containing ancestry segment data
-        # Align the ancestry data with the provided genomic positions and assign ancestry labels accordingly
-        ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
-        unique_ancestries = [str(i) for i in np.arange(0, n_ancestries)]
-        ancestry_int_list = unique_ancestries
-        masks = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
-    
-    else:
-        if not is_masked:
-            ancestry_int_list = [str(i) for i in np.arange(1, n_ancestries+1)]
-        else:
-            ancestry_int_list = [str(i) for i in np.arange(0, n_ancestries)]
-
-        masks = {}
-        if average_strands:
-            calldata_gt_avg = average_parent_snps(calldata_gt)
-            for ancestry in ancestry_int_list:
-                masks[ancestry] = calldata_gt_avg
-        else:
-            for ancestry in ancestry_int_list:
-                masks[ancestry] = calldata_gt
-        logging.info("No masking")
-        
-    return masks, ind_IDs, variants_id
-
-
-def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos): 
+def get_masked_matrix(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos): 
     """                                                                                       
     Obtain ancestry-based masked genotype matrixes and correponding SNP identifiers and haplotype identifiers.
 
@@ -587,13 +519,38 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos):
     """
     # Obtain the masked genotype matrices, SNP identifiers, and haplotype identifiers
     logging.info("------ Array Processing: ------")
-    masks, haplotypes, variants_id = get_masked_matrix(
-        snpobj, 
-        laiobj,
-        is_masked,
-        average_strands, 
-        rsid_or_chrompos
-    )
+    
+    # Process the genetic variant data from a SNPObject, restructure genotype information, 
+    # format variant identifiers, and ensure consistency in allele encoding
+    calldata_gt, haplotypes, variants_id, positions = process_snpobj(snpobj, rsid_or_chrompos)
+    
+    # Obtain number of unique ancestries in LocalAncestryObject
+    n_ancestries = laiobj.n_ancestries
+
+    if is_masked:
+        # Obtain a 
+        # Process the LocalAncestryObject containing ancestry segment data
+        # Align the ancestry data with the provided genomic positions and assign ancestry labels accordingly
+        ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
+        unique_ancestries = [str(i) for i in np.arange(0, n_ancestries)]
+        ancestry_int_list = unique_ancestries
+        masks = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
+    
+    else:
+        if not is_masked:
+            ancestry_int_list = [str(i) for i in np.arange(1, n_ancestries+1)]
+        else:
+            ancestry_int_list = [str(i) for i in np.arange(0, n_ancestries)]
+
+        masks = {}
+        if average_strands:
+            calldata_gt_avg = average_parent_snps(calldata_gt)
+            for ancestry in ancestry_int_list:
+                masks[ancestry] = calldata_gt_avg
+        else:
+            for ancestry in ancestry_int_list:
+                masks[ancestry] = calldata_gt
+        logging.info("No masking")
 
     if average_strands:
         # Remove duplicate haplotype identifiers (A/B labels)
