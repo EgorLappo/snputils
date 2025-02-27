@@ -88,7 +88,7 @@ def process_fbk(fbk_file, num_ancestries, prob_thresh):
     return ancestry_matrix
 
 
-def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt, rs_IDs):
+def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt, variants_id):
     """                                                                                       
     Process the TSV/FB file to extract ancestry information.
 
@@ -109,7 +109,7 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt
             List of genomic positions corresponding to the SNP data.
         calldata_gt (np.ndarray of shape (n_snps, n_samples)): 
             An array containing genotype data for each sample.
-        rs_IDs (list of str): 
+        variants_id (list of str): 
             List of SNP identifiers corresponding to genomic positions.
 
     Returns:
@@ -143,7 +143,7 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt
     # Update genome data to match the TSV file range
     calldata_gt = calldata_gt[i_start:i_end, :]
     positions = positions[i_start:i_end]
-    rs_IDs = rs_IDs[i_start:i_end]
+    variants_id = variants_id[i_start:i_end]
 
     # Initialize probability matrix with the same shape as filtered positions
     prob_matrix = np.zeros((len(positions), tsv_matrix.shape[1]), dtype=np.float16)
@@ -178,10 +178,10 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt
     ancestry_matrix = ancestry_matrix.astype(str)
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
     
-    return ancestry_matrix, calldata_gt, rs_IDs
+    return ancestry_matrix, calldata_gt, variants_id
 
 
-def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, rs_IDs):
+def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, variants_id):
     """                                                                                       
     Process the TSV/MSP file to extract ancestry information.
 
@@ -199,7 +199,7 @@ def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, rs_IDs):
         calldata_gt (np.ndarray of shape (n_snps, n_samples)): 
             Genome matrix indicating reference/alternate alleles for individuals 
             across genomic positions.
-        rs_IDs (list of str): 
+        variants_id (list of str): 
             List of SNP identifiers corresponding to genomic positions.
 
     Returns:
@@ -227,7 +227,7 @@ def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, rs_IDs):
     
     calldata_gt = calldata_gt[i_start:i_end, :]
     positions = positions[i_start:i_end]
-    rs_IDs = rs_IDs[i_start:i_end]
+    variants_id = variants_id[i_start:i_end]
 
     tsv_chromosomes = laiobj['chromosomes']
     ancestry_matrix = np.zeros((len(positions), tsv_matrix.shape[1]), dtype=np.int8)
@@ -249,7 +249,7 @@ def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, rs_IDs):
     ancestry_matrix = ancestry_matrix.astype(str)
     
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
-    return ancestry_matrix, calldata_gt, rs_IDs
+    return ancestry_matrix, calldata_gt, variants_id
 
 
 def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
@@ -269,13 +269,13 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
                   poisition m. 
     ind_IDs     : (n,) array
                   Individual IDs for all individuals in the matrix. 
-    rs_IDs      : (m,) array
+    variants_id      : (m,) array
                   rs IDs of all the positions included in our matrix. 
     rs_ID_dict  :
                   Encoding dictionary for each of the positions in dataset.                                                                                                                                               
     """
     start_time = time.time()
-    rs_IDs = []
+    variants_id = []
     lis_beagle = []
     with open(beagle_file) as file:
         x = file.readline()
@@ -285,10 +285,10 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
         for x in file:
             x_split = x.replace('\n', '').split('\t')
             if rsid_or_chrompos == 1:
-                rs_IDs.append(int(x_split[1][2:]))
+                variants_id.append(int(x_split[1][2:]))
             elif rsid_or_chrompos == 2:
                 rs_ID_split = x_split[1].split('_')
-                rs_IDs.append(np.float64(rs_ID_split[0] + '.' + rs_ID_split[1][::-1]))
+                variants_id.append(np.float64(rs_ID_split[0] + '.' + rs_ID_split[1][::-1]))
             else:
                 sys.exit("Illegal value for rsid_or_chrompos. Choose 1 for rsID format or 2 for Chromosome_position format.")
             lis_beagle.append(x_split[2:])
@@ -298,18 +298,18 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
     processed_IDs = rs_ID_dict.keys()
     for i in range(len(lis_beagle)):
         # Check how we usually encode:
-        if (rs_IDs[i] in processed_IDs):
-            ref = rs_ID_dict[rs_IDs[i]]
+        if (variants_id[i] in processed_IDs):
+            ref = rs_ID_dict[variants_id[i]]
         else:
             ref = lis_beagle[i][0]
-            rs_ID_dict[rs_IDs[i]] = ref
+            rs_ID_dict[variants_id[i]] = ref
 
         for j in range(1, len(lis_beagle[i])):
             calldata_gt[i, j] = (lis_beagle[i][j] != ref)*1
 
     logging.info("Beagle Processing Time: --- %s seconds ---" % (time.time() - start_time))
 
-    return calldata_gt, ind_IDs, rs_IDs, rs_ID_dict
+    return calldata_gt, ind_IDs, variants_id, rs_ID_dict
 
 
 def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
@@ -329,7 +329,7 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
                   poisition m. 
     ind_IDs     : (n,) array
                   Individual IDs for all individuals in the matrix. 
-    rs_IDs      : (m,) array
+    variants_id      : (m,) array
                   rs IDs of all the positions included in our matrix. 
     positions   :  
     rs_ID_dict  : dictionary showing the previous encoding for a specific 
@@ -342,11 +342,11 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     np.place(calldata_gt, calldata_gt < 0, np.nan)
     if rsid_or_chrompos == 1:
         IDs = snpobj['variants_id']
-        rs_IDs = [int(x[2:]) for x in IDs]
+        variants_id = [int(x[2:]) for x in IDs]
     elif rsid_or_chrompos == 2:
-        rs_IDs = []
+        variants_id = []
         for i in range(len(snpobj['variants_chrom'])):
-            rs_IDs.append(np.float64(snpobj['variants_chrom'][i] + '.' + str(snpobj['variants_pos'][i])[::-1]))
+            variants_id.append(np.float64(snpobj['variants_chrom'][i] + '.' + str(snpobj['variants_pos'][i])[::-1]))
     else:
         sys.exit("Illegal value for rsid_or_chrompos. Choose 1 for rsID format or 2 for Chromosome_position format.")
     ref_vcf = snpobj['variants_ref']
@@ -359,8 +359,8 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     positions = snpobj['variants_pos'].tolist()
     
     processed_IDs = rs_ID_dict.keys()
-    for i in range(len(rs_IDs)):
-        rs_ID = rs_IDs[i]
+    for i in range(len(variants_id)):
+        rs_ID = variants_id[i]
         if (rs_ID in processed_IDs):
             ref = rs_ID_dict[rs_ID]
         else:
@@ -370,7 +370,7 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
             calldata_gt[i, :] = 1 - calldata_gt[i, :]
     
     logging.info("VCF Processing Time: --- %s seconds ---" % (time.time() - start_time))
-    return calldata_gt, ind_IDs, rs_IDs, positions, rs_ID_dict
+    return calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict
 
 
 def mask(ancestry_matrix, calldata_gt, unique_ancestries, dict_ancestries, average_strands = False):
@@ -471,19 +471,19 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
                        dataset.
     ind_IDs          : (n,) array
                        Individual IDs for all individuals in the matrix. 
-    rs_IDs           : (m,) array
+    variants_id           : (m,) array
                        rs IDs of all the positions included in our matrix. 
     rs_ID_dict       :
                        Encoding dictionary for each of the positions in dataset.             
     """
     if beagle_or_vcf == 1:
-        calldata_gt, ind_IDs, rs_IDs, rs_ID_dict = process_beagle(snpobj, rs_ID_dict, rsid_or_chrompos)
+        calldata_gt, ind_IDs, variants_id, rs_ID_dict = process_beagle(snpobj, rs_ID_dict, rsid_or_chrompos)
     elif beagle_or_vcf == 2:
-        calldata_gt, ind_IDs, rs_IDs, positions, rs_ID_dict = process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos)
+        calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict = process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos)
         
     if is_masked and vit_or_fbk_or_fbtsv_or_msptsv != 0:
         
-        ancestry_matrix, calldata_gt, rs_IDs = process_tsv_msp(laiobj, positions, snpobj['variants_chrom'], calldata_gt, rs_IDs)
+        ancestry_matrix, calldata_gt, variants_id = process_tsv_msp(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
 
         if vit_or_fbk_or_fbtsv_or_msptsv == 1 or vit_or_fbk_or_fbtsv_or_msptsv == 2:
             unique_ancestries = [str(i) for i in np.arange(1, num_ancestries+1)]
@@ -512,7 +512,7 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
                 masked_matrices[ancestry] = calldata_gt
         logging.info("No masking")
         
-    return masked_matrices, ind_IDs, rs_IDs, rs_ID_dict
+    return masked_matrices, ind_IDs, variants_id, rs_ID_dict
 
 
 def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_or_chrompos, num_arrays=1): 
@@ -574,7 +574,7 @@ def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_
 
     for i in range(num_arrays):
         logging.info("------ Array "+ str(i+1) + " Processing: ------")
-        genome_matrix, ind_IDs, rs_IDs, rs_ID_dict = get_masked_matrix(snpobj, beagle_or_vcf_list[i],
+        genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(snpobj, beagle_or_vcf_list[i],
                                                                        laiobj,
                                                                        vit_or_fbk_or_fbtsv_or_msptsv_list[i], is_mixed, is_masked,
                                                                        num_ancestries, average_strands, prob_thresh, rs_ID_dict,
@@ -582,7 +582,7 @@ def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_
 
 
         masks.append(genome_matrix)
-        rs_ID_list.append(rs_IDs)
+        rs_ID_list.append(variants_id)
         if (average_strands == False):
             ind_ID_list.append(ind_IDs)
         else:
