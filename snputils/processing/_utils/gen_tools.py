@@ -88,7 +88,7 @@ def process_fbk(fbk_file, num_ancestries, prob_thresh):
     return ancestry_matrix
 
 
-def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt, variants_id):
+def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, variants_pos, calldata_gt, variants_id):
     """                                                                                       
     Process the TSV/FB file to extract ancestry information.
 
@@ -105,12 +105,12 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt
         prob_thresh (float): 
             Probability threshold for assigning ancestry to an individual at a 
             specific position.
-        positions (list of int): 
-            List of genomic positions corresponding to the SNP data.
+        variants_pos (list of int): 
+            A list containing the chromosomal positions for each SNP.
         calldata_gt (np.ndarray of shape (n_snps, n_samples)): 
             An array containing genotype data for each sample.
         variants_id (list of str): 
-            List of SNP identifiers corresponding to genomic positions.
+            A list containing unique identifiers (IDs) for each SNP.
 
     Returns:
         Tuple:
@@ -134,25 +134,25 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt
     tsv_matrix = df_tsv.values
 
     # Find the range of positions that match between TSV and provided positions
-    i_start = positions.index(tsv_positions[0])
-    if tsv_positions[-1] in positions:
-        i_end = positions.index(tsv_positions[-1]) + 1
+    i_start = variants_pos.index(tsv_positions[0])
+    if tsv_positions[-1] in variants_pos:
+        i_end = variants_pos.index(tsv_positions[-1]) + 1
     else:
-        i_end = len(positions)
+        i_end = len(variants_pos)
 
     # Update genome data to match the TSV file range
     calldata_gt = calldata_gt[i_start:i_end, :]
-    positions = positions[i_start:i_end]
+    variants_pos = variants_pos[i_start:i_end]
     variants_id = variants_id[i_start:i_end]
 
     # Initialize probability matrix with the same shape as filtered positions
-    prob_matrix = np.zeros((len(positions), tsv_matrix.shape[1]), dtype=np.float16)
+    prob_matrix = np.zeros((len(variants_pos), tsv_matrix.shape[1]), dtype=np.float16)
 
     # Align TSV probabilities with genomic positions
     i_tsv = -1
     next_pos_tsv = tsv_positions[i_tsv+1]
-    for i in range(len(positions)):
-        pos = positions[i]
+    for i in range(len(variants_pos)):
+        pos = variants_pos[i]
         if pos >= next_pos_tsv and i_tsv + 1 < tsv_matrix.shape[0]:
             i_tsv += 1
             probs = tsv_matrix[i_tsv, :]
@@ -181,7 +181,7 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt
     return ancestry_matrix, calldata_gt, variants_id
 
 
-def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, variants_id):
+def process_tsv_msp(laiobj, variants_pos, variants_chrom, calldata_gt, variants_id):
     """                                                                                       
     Process the TSV/MSP file to extract ancestry information.
 
@@ -192,15 +192,14 @@ def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, variants_id):
     Args:
         laiobj (dict): 
             A LocalAncestryObject instance.
-        positions (list of int): 
-            An array containing the chromosomal positions for each SNP.
-        chromosomes (list of int): 
-            An array containing the chromosome for each SNP.
+        variants_pos (list of int): 
+            A list containing the chromosomal positions for each SNP.
+        variants_chrom (list of int): 
+            A list containing the chromosome for each SNP.
         calldata_gt (np.ndarray of shape (n_snps, n_samples)): 
-            Genome matrix indicating reference/alternate alleles for individuals 
-            across genomic positions.
+            An array containing genotype data for each sample.
         variants_id (list of str): 
-            List of SNP identifiers corresponding to genomic positions.
+            A list containing unique identifiers (IDs) for each SNP.
 
     Returns:
         Tuple:
@@ -219,25 +218,25 @@ def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, variants_id):
     tsv_epos = laiobj['physical_pos'][:,1].tolist()
     tsv_matrix = laiobj['lai']
 
-    i_start = positions.index(tsv_spos[0])
-    if tsv_epos[-1] in positions:
-        i_end = positions.index(tsv_epos[-1])
+    i_start = variants_pos.index(tsv_spos[0])
+    if tsv_epos[-1] in variants_pos:
+        i_end = variants_pos.index(tsv_epos[-1])
     else:
-        i_end = len(positions)
+        i_end = len(variants_pos)
     
     calldata_gt = calldata_gt[i_start:i_end, :]
-    positions = positions[i_start:i_end]
+    variants_pos = variants_pos[i_start:i_end]
     variants_id = variants_id[i_start:i_end]
 
     tsv_chromosomes = laiobj['chromosomes']
-    ancestry_matrix = np.zeros((len(positions), tsv_matrix.shape[1]), dtype=np.int8)
+    ancestry_matrix = np.zeros((len(variants_pos), tsv_matrix.shape[1]), dtype=np.int8)
     i_tsv = -1
     next_pos_tsv = tsv_spos[i_tsv+1]
     next_chrom_tsv = tsv_chromosomes[i_tsv+1]
 
     assign_dict = {}
-    for i, pos in enumerate(positions):
-        if pos >= next_pos_tsv and int(chromosomes[i]) == int(next_chrom_tsv) and i_tsv + 1 < tsv_matrix.shape[0]:
+    for i, pos in enumerate(variants_pos):
+        if pos >= next_pos_tsv and int(variants_chrom[i]) == int(next_chrom_tsv) and i_tsv + 1 < tsv_matrix.shape[0]:
             i_tsv += 1
             ancs = tsv_matrix[i_tsv, :]
             if i_tsv + 1 < tsv_matrix.shape[0]:
