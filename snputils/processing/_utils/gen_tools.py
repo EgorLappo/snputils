@@ -183,11 +183,8 @@ def process_tsv_fb(tsv_file, n_ancestries, prob_thresh, variants_pos, calldata_g
 
 def process_laiobj(laiobj, variants_pos, variants_chrom, calldata_gt, variants_id):
     """                                                                                       
-    Process the LocalAncestryObject to extract ancestry information.
-
-    This function processes a LocalAncestryObject containing ancestry segment data. 
-    It aligns the ancestry data with the provided genomic positions and 
-    assigns ancestry labels accordingly.
+    Obtain a SNP-level ancestry matrix by matching genomic positions and chromosomes in the SNPObject 
+    with ancestry segments in the LocalAncestryObject.
 
     Args:
         laiobj (LocalAncestryObject): 
@@ -335,9 +332,14 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
     return calldata_gt, ind_IDs, variants_id, rs_ID_dict
 
 
-def process_snpobj(snpobj, rs_ID_dict, rsid_or_chrompos):
+def process_snpobj(snpobj, rsid_or_chrompos):
     """                                                                                       
-    Extract and format genotype data from a SNPObject.
+    Format genotype data from a SNPObject:
+    - Reshape the 3D genotype array into a 2D matrix (n_snps, n_haplotypes).
+    - Replace missing genotype values (indicated by -1) with NaN.
+    - Generate variant identifiers using either the rsID or chromosome_position format, based on a provided flag.
+    - Create diploid sample identifiers by appending "_A" and "_B" to each sample.
+    - 
 
     This function processes genetic variant data from a SNPObject, restructuring genotype information, 
     formatting variant identifiers, and ensuring consistency in allele encoding.
@@ -345,9 +347,6 @@ def process_snpobj(snpobj, rs_ID_dict, rsid_or_chrompos):
     Args:
         snpobj (SNPObjects): 
             A SNPObject instance.
-        rs_ID_dict (dict): 
-            Dictionary mapping variant identifiers to reference alleles. 
-            If an identifier is not found, it will be added to the dictionary.
         rsid_or_chrompos (int): 
             Specifies the format of variant identifiers:
             - `1`: rsID format (e.g., "rs12345").
@@ -355,11 +354,11 @@ def process_snpobj(snpobj, rs_ID_dict, rsid_or_chrompos):
 
     Returns:
         Tuple:
-            - np.ndarray of shape (n_snps, n_samples * ploidy): 
+            - np.ndarray of shape (n_snps, n_haplotypes): 
                 A genotype matrix where `n_snps` represents the number of genomic 
-                positions and `n_samples * ploidy` represents the flattened genotype calls 
+                positions and `n_haplotypes` represents the flattened genotype calls 
                 for diploid individuals.
-            - np.ndarray of shape (n_samples * ploidy,): 
+            - np.ndarray of shape (n_haplotypes,): 
                 Array of individual IDs corresponding to the genotype matrix.
             - list of int or float: 
                 List of variant identifiers, formatted based on `rsid_or_chrompos` selection.
@@ -399,18 +398,8 @@ def process_snpobj(snpobj, rs_ID_dict, rsid_or_chrompos):
     # Extract variant positions
     positions = snpobj['variants_pos'].tolist()
     
-    # Process reference allele encoding
-    for i, (rs_ID, ref_val) in enumerate(zip(variants_id, ref_vcf)):
-        # If rs_ID is not in the dictionary, it is set to ref_val
-        # Otherwise, it returns the existing value
-        ref = rs_ID_dict.setdefault(rs_ID, ref_val)
-
-        # Flip genotype encoding if reference allele differs from stored reference
-        if ref != ref_val:
-            calldata_gt[i, :] = 1 - calldata_gt[i, :]
-    
-    logging.info("VCF Processing Time: --- %s seconds ---" % (time.time() - start_time))
-    return calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict
+    logging.info("SNPObject Processing Time: --- %s seconds ---" % (time.time() - start_time))
+    return calldata_gt, ind_IDs, variants_id, positions
 
 
 def average_parent_snps(masked_ancestry_matrix):
@@ -506,7 +495,6 @@ def get_masked_matrix(
         is_masked, 
         n_ancestries, 
         average_strands, 
-        rs_ID_dict, 
         rsid_or_chrompos
     ):
     """
@@ -522,8 +510,6 @@ def get_masked_matrix(
             Number of unique ancestry groups in the dataset.
         average_strands (bool): 
             Whether to average haplotypes for each individual.
-        rs_ID_dict (dict): 
-            Dictionary mapping variant identifiers to reference alleles.
         rsid_or_chrompos (int): 
             Specifies the format of variant identifiers:
             - `1`: rsID format (e.g., "rs12345").
@@ -538,15 +524,14 @@ def get_masked_matrix(
                 Array containing individual IDs for all individuals in the dataset.
             - variants_id (np.ndarray): 
                 Array containing SNP identifiers (rs IDs) for all positions in the dataset.
-            - rs_ID_dict (dict): 
-                Updated mapping of SNP identifiers to encoded positions.
     """
     # Process the genetic variant data from a SNPObject, restructure genotype information, 
     # format variant identifiers, and ensure consistency in allele encoding
-    calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict = process_snpobj(snpobj, rs_ID_dict, rsid_or_chrompos)
+    calldata_gt, ind_IDs, variants_id, positions = process_snpobj(snpobj, rsid_or_chrompos)
     
     if is_masked:
-        # Process the LocalAncestryObject containing ancestry segment data
+        # Obtain a 
+        # Process the LocalAncestryObject containing ancestry segment data
         # Align the ancestry data with the provided genomic positions and assign ancestry labels accordingly
         ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
         unique_ancestries = [str(i) for i in np.arange(0, n_ancestries)]
@@ -569,7 +554,7 @@ def get_masked_matrix(
                 masked_matrices[ancestry] = calldata_gt
         logging.info("No masking")
         
-    return masked_matrices, ind_IDs, variants_id, rs_ID_dict
+    return masked_matrices, ind_IDs, variants_id
 
 
 def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos): 
@@ -600,23 +585,20 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos):
             - ind_ID_list (list of np.ndarray): 
                 A list where each entry contains individual IDs for the corresponding array.
     """
-    # Initialization:
-    rs_ID_dict = {}
-    masks =[]
+    masks = []
     rs_ID_list = []
     ind_ID_list = []
 
-    # Obtain number of ancestries in LAI object
+    # Obtain number of unique ancestries in LocalAncestryObject
     n_ancestries = laiobj.n_ancestries
 
     logging.info("------ Array Processing: ------")
-    genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(
+    genome_matrix, ind_IDs, variants_id = get_masked_matrix(
         snpobj, 
         laiobj,
         is_masked,
         n_ancestries, 
         average_strands, 
-        rs_ID_dict,
         rsid_or_chrompos
     )
 
