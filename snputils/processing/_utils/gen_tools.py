@@ -503,7 +503,6 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
 def get_masked_matrix(
         snpobj, 
         laiobj, 
-        vit_or_fbk_or_fbtsv_or_msptsv,
         is_masked, 
         num_ancestries, 
         average_strands, 
@@ -521,8 +520,6 @@ def get_masked_matrix(
             A SNPObject instance.
         laiobj: 
             Local ancestry inference object, used for ancestry-based masking.
-        vit_or_fbk_or_fbtsv_or_msptsv (int): 
-            Indicator for ancestry file type (1 = vit, 2 = fbk, 3 = fbtsv, 4 = msptsv).
         is_masked (bool): 
             Whether ancestry-based masking should be applied.
         num_ancestries (int): 
@@ -608,8 +605,6 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
                  List of individual IDs for each of the processed arrays.
 
     """
-    vit_or_fbk_or_fbtsv_or_msptsv_list = [4]
-
     # Initialization:
     rs_ID_dict = {}
     masks =[]
@@ -623,7 +618,7 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
         logging.info("------ Array "+ str(i+1) + " Processing: ------")
         genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(snpobj, 
                                                                        laiobj,
-                                                                       vit_or_fbk_or_fbtsv_or_msptsv_list[i], is_masked,
+                                                                       is_masked,
                                                                        num_ancestries, average_strands, rs_ID_dict,
                                                                        rsid_or_chrompos)
 
