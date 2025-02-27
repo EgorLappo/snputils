@@ -234,7 +234,6 @@ def process_tsv_msp(laiobj, variants_pos, variants_chrom, calldata_gt, variants_
     next_pos_tsv = tsv_spos[i_tsv+1]
     next_chrom_tsv = tsv_chromosomes[i_tsv+1]
 
-    assign_dict = {}
     for i, pos in enumerate(variants_pos):
         if pos >= next_pos_tsv and int(variants_chrom[i]) == int(next_chrom_tsv) and i_tsv + 1 < tsv_matrix.shape[0]:
             i_tsv += 1
