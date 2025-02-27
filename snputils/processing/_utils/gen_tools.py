@@ -264,30 +264,41 @@ def process_laiobj(laiobj, variants_pos, variants_chrom, calldata_gt, variants_i
 
 def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
     """                                                                                       
-    Beagle File Processing                                                 
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    beagle_file : string with the path of our beagle file.  
-    rs_ID_dict  : dictionary showing the previous encoding for a specific 
-                  rs ID.
+    Process a Beagle file to extract genotype and variant information.
 
-    Returns                                                                                   
-    -------   
-    calldata_gt.  : (m, n) array
-                  Genetic matrix indicating the encoding for individual n at 
-                  poisition m. 
-    ind_IDs     : (n,) array
-                  Individual IDs for all individuals in the matrix. 
-    variants_id      : (m,) array
-                  rs IDs of all the positions included in our matrix. 
-    rs_ID_dict  :
-                  Encoding dictionary for each of the positions in dataset.                                                                                                                                               
+    This function processes a Beagle genotype file to extract individual IDs, 
+    reformat variant identifiers, and encode genetic information into a structured 
+    genotype matrix.
+
+    Args:
+        beagle_file (str): 
+            Path to the Beagle file containing genotype data.
+        rs_ID_dict (dict): 
+            Dictionary mapping variant identifiers to their reference alleles. 
+            If an identifier is not found, it will be added to the dictionary.
+        rsid_or_chrompos (int): 
+            Format specification for variant identifiers:
+            - `1`: Use rsID format.
+            - `2`: Use Chromosome_Position format.
+
+    Returns:
+        Tuple:
+            - np.ndarray of shape (n_snps, n_samples * ploidy): 
+                A genotype matrix where `n_snps` represents the number of genomic 
+                positions and `n_samples * ploidy` represents the flattened genotype calls 
+                for diploid individuals.
+            - np.ndarray of shape (n_samples,): 
+                Array of individual IDs corresponding to the genotype matrix.
+            - list of int or float: 
+                List of variant identifiers, formatted based on `rsid_or_chrompos` selection.
+            - dict: 
+                Updated reference allele dictionary mapping variant identifiers to reference alleles.
     """
     start_time = time.time()
     variants_id = []
     lis_beagle = []
     with open(beagle_file) as file:
+        # Read header line and extract individual IDs
         x = file.readline()
         x_split = x.replace('\n', '').split('\t')
         ind_IDs = x_split[2:]
@@ -303,8 +314,10 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
                 sys.exit("Illegal value for rsid_or_chrompos. Choose 1 for rsID format or 2 for Chromosome_position format.")
             lis_beagle.append(x_split[2:])
     
+    # Initialize genotype matrix
     calldata_gt = np.zeros((len(lis_beagle),len(lis_beagle[0])), dtype=np.float16)
     
+    # Process reference allele encoding
     processed_IDs = rs_ID_dict.keys()
     for i in range(len(lis_beagle)):
         # Check how we usually encode:
@@ -333,8 +346,8 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
         snpobj (dict): 
             A SNPObject instance.
         rs_ID_dict (dict): 
-            A dictionary mapping rsIDs or variant positions to their reference alleles.
-            If an rsID is not found in the dictionary, it will be added.
+            Dictionary mapping variant identifiers to their reference alleles. 
+            If an identifier is not found, it will be added to the dictionary.
         rsid_or_chrompos (int): 
             Format specification for variant identifiers:
             - `1`: Use rsID format.
@@ -388,8 +401,8 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     
     # Process reference allele encoding
     for i, (rs_ID, ref_val) in enumerate(zip(variants_id, ref_vcf)):
-        # If rs_ID isn't in the dictionary, it is set to ref_val
-        # Otherwise, it returns the existing value.
+        # If rs_ID is not in the dictionary, it is set to ref_val
+        # Otherwise, it returns the existing value
         ref = rs_ID_dict.setdefault(rs_ID, ref_val)
 
         # Flip genotype encoding if reference allele differs from stored reference
@@ -400,33 +413,37 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     return calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict
 
 
-def mask(ancestry_matrix, calldata_gt, unique_ancestries, dict_ancestries, average_strands = False):
+def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands = False):
     """                                                                                       
-    Masking Function for each of the available ancestries.                                               
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    ancestry_matrix   : (m, n) array
-                        Ancestry Matrix indicating the ancestry for individual n at
-                        position m. 
-    calldata_gt         : (m, n) array
-                        Genetic matrix indicating the encoding for individual n at 
-                        poisition m. 
-    unique_ancestries : list of distinct unique ancestries in our ancestry file.
-    average_strands   : Boolean to combine haplotypes for each individuals.
+    Mask genotype data based on ancestry labels.
 
-    Returns                                                                                   
-    -------   
-    masked_matrices : (m, n, u) dictionary/3D array
-                      masked matrices for each of the distinct ancestries in the 
-                      dataset.            
+    This function applies ancestry-based masking to a genomic matrix, selectively retaining genotype 
+    data for individual haplotypes based on their assigned ancestry.
+
+    Args:
+        ancestry_matrix (np.ndarray of shape (n_snps, n_haplotypes)): 
+            Matrix indicating the ancestry assignment for individual `n_haplotypes` at position `n_snps`.
+        calldata_gt (np.ndarray of shape (n_snps, n_haplotypes)): 
+            Genetic matrix encoding the genotype information for haplotypes.
+        unique_ancestries (list): 
+            List of distinct ancestries present in the dataset.
+        ancestry_int_list (list): 
+            List of ancestry identifiers.
+        average_strands (bool, optional): 
+            Whether to average haplotypes for each individual. Defaults to `False`.
+
+    Returns:
+        dict: 
+            Dictionary containing masked genetic matrices for each ancestry group.
     """
-    
+
+    print(ancestry_int_list)
+
     start_time = time.time()
     masked_matrices = {}
     for i in range(len(unique_ancestries)):
         ancestry = unique_ancestries[i]
-        dict_ancestry = dict_ancestries[i]
+        dict_ancestry = ancestry_int_list[i]
         masked = np.empty(ancestry_matrix.shape[0] * ancestry_matrix.shape[1], dtype = np.float16)
         masked[:] = np.nan
         arg = ancestry_matrix.reshape(-1) == ancestry
@@ -517,25 +534,25 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
         else:
             unique_ancestries = [str(i) for i in np.arange(0, num_ancestries)]
         if is_mixed:
-            dict_ancestries = [str(i) for i in np.arange(0, num_ancestries)]
+            ancestry_int_list = [str(i) for i in np.arange(0, num_ancestries)]
         else:
-            dict_ancestries = unique_ancestries
-        masked_matrices = mask(ancestry_matrix, calldata_gt, unique_ancestries, dict_ancestries, average_strands)
+            ancestry_int_list = unique_ancestries
+        masked_matrices = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
     
     else:
         if not is_masked:
-            dict_ancestries = [str(i) for i in np.arange(1, num_ancestries+1)]
+            ancestry_int_list = [str(i) for i in np.arange(1, num_ancestries+1)]
         elif is_mixed or beagle_or_vcf == 2:
-            dict_ancestries = [str(i) for i in np.arange(0, num_ancestries)]
+            ancestry_int_list = [str(i) for i in np.arange(0, num_ancestries)]
         else:
-            dict_ancestries = [str(i) for i in np.arange(1, num_ancestries+1)]
+            ancestry_int_list = [str(i) for i in np.arange(1, num_ancestries+1)]
         masked_matrices = {}
         if average_strands:
             calldata_gt_avg = average_parent_snps(calldata_gt)
-            for ancestry in dict_ancestries:
+            for ancestry in ancestry_int_list:
                 masked_matrices[ancestry] = calldata_gt_avg
         else:
-            for ancestry in dict_ancestries:
+            for ancestry in ancestry_int_list:
                 masked_matrices[ancestry] = calldata_gt
         logging.info("No masking")
         
@@ -583,7 +600,6 @@ def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_
     """
     beagle_or_vcf_list = [2]
     vit_or_fbk_or_fbtsv_or_msptsv_list = [4]
-    vit_fbk_fbtsv_msptsv_file_list = ['/mnt/8tb_1/users/miriam/jira/PSW-75-run-mdPCA-and-maasMDS/data/array1/maasMDS_easComp_6_samples.msp.tsv']
 
     if (1 in beagle_or_vcf_list) and (2 in beagle_or_vcf_list):
         is_mixed = True
@@ -625,6 +641,7 @@ def remove_AB_indIDs(ind_IDs):
     new_ind_IDs = np.array(new_ind_IDs)
     return new_ind_IDs
 
+
 def add_AB_indIDs(ind_IDs):
     new_ind_IDs = []
     for i in range(len(ind_IDs)):
@@ -632,6 +649,7 @@ def add_AB_indIDs(ind_IDs):
         new_ind_IDs.append(str(ind_IDs[i]) + '_B')
     new_ind_IDs = np.array(new_ind_IDs)
     return new_ind_IDs
+
 
 def process_labels_weights(labels_file, masks, rs_ID_list, ind_ID_list, average_strands, ancestry, min_percent_snps, remove_labels_dict, is_weighted, save_masks, masks_file, num_arrays=1):
     labels_df = pd.read_csv(labels_file, sep='\t')
