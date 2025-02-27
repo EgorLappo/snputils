@@ -13,17 +13,23 @@ warnings.simplefilter("ignore", category=RuntimeWarning)
 
 def process_vit(vit_file):
     """                                                                                       
-    Viterbi File Processing                                                 
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    vit_file    : string with the path of our viterbi file.                                                                       
+    Process the Viterbi file to extract ancestry information.
 
-    Returns                                                                                   
-    -------   
-    ancestry_matrix  : (m, n) array
-                  Viterbi Matrix indicating the ancestry for individual n at
-                  position m.                                                                                                                                             
+    This function reads a Viterbi file containing ancestry information for individuals 
+    at different genomic positions. It processes the file to construct an ancestry 
+    matrix, where each row represents a genomic position and each column corresponds 
+    to an individual.
+
+    Args:
+        vit_file (str): 
+            Path to the Viterbi file. The file should be tab-separated, where the first 
+            column represents genomic positions, and the remaining columns contain 
+            ancestry assignments for individuals.
+
+    Returns:
+        np.ndarray of shape (n_snps, n_samples): 
+            An ancestry matrix where `n_snps` represents the number of genomic positions 
+            and `n_samples` represents the number of individuals.
     """
     start_time = time.time()
     vit_matrix = []
@@ -33,70 +39,117 @@ def process_vit(vit_file):
             vit_matrix.append(np.array(x_split[1:-1]))
     ancestry_matrix = np.stack(vit_matrix, axis=0).T
     logging.info("VIT Processing Time: --- %s seconds ---" % (time.time() - start_time))
+    
     return ancestry_matrix
+
 
 def process_fbk(fbk_file, num_ancestries, prob_thresh):    
     """                                                                                       
-    FBK File Processing                                                 
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    fbk_file       : string with the path of our fbk file.    
-    num_ancestries : number of distinct ancestries in dataset.
-    prob_thres     : probability threshold for ancestry assignment.
+    Process the FBK file to extract ancestry information.
 
-    Returns                                                                                   
-    -------   
-    ancestry_matrix  : (m, n) array
-                  Viterbi Matrix indicating the ancestry for individual n at
-                  position m.                                                                                                                                             
+    This function reads an FBK file containing ancestry probability values for 
+    individuals across genomic positions. It processes these probabilities and 
+    assigns ancestries based on a specified probability threshold.
+
+    Args:
+        fbk_file (str): 
+            Path to the FBK file. The file should be space-separated, where each 
+            row represents a genomic position, and columns contain probability values.
+        num_ancestries (int): 
+            Number of distinct ancestries in the dataset.
+        prob_thresh (float): 
+            Probability threshold for assigning ancestry to an individual at a 
+            specific position.
+
+    Returns:
+        np.ndarray of shape (n_snps, n_samples): 
+            An ancestry matrix where `n_snps` represents the number of genomic 
+            positions and `n_samples` represents the number of individuals.
     """
     start_time = time.time()
+    # Load FBK file into a DataFrame
     df_fbk = pd.read_csv(fbk_file, sep=" ", header=None)
+    
+    # Extract ancestry probability values, excluding the last column
     fbk_matrix = df_fbk.values[:, :-1]
+    
+    # Initialize ancestry matrix with zeros
     ancestry_matrix = np.zeros((fbk_matrix.shape[0], int(fbk_matrix.shape[1] / num_ancestries)), dtype=np.int8)
+    
+    # Assign ancestry based on probability threshold
     for i in range(num_ancestries):
         ancestry = i+1
         ancestry_matrix += (fbk_matrix[:, i::num_ancestries] > prob_thresh) * 1 * ancestry
+    
+    # Convert ancestry values to string format
     ancestry_matrix = ancestry_matrix.astype(str)
     logging.info("FBK Processing Time: --- %s seconds ---" % (time.time() - start_time))
+    
     return ancestry_matrix
+
 
 def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, gt_matrix, rs_IDs):
     """                                                                                       
-    tsv_fb File Processing                                                 
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    tsv_file       : string with the path of our tsv file.    
-    num_ancestries : number of distinct ancestries in dataset.
-    prob_thres     : probability threshold for ancestry assignment.
-    positions      :
-    gt_matrix      : (m,n) array
-                     Genome matrix indicating ref/alt letter for individual n
-                     at position m.
+    Process the TSV/FB file to extract ancestry information.
 
-    Returns                                                                                   
-    -------   
-    ancestry_matrix  : (m, n) array
-                  Viterbi Matrix indicating the ancestry for individual n at
-                  position m.                                                                                                                               
+    This function reads a TSV file containing ancestry probabilities, aligns 
+    positions with the given genome data, and assigns ancestry labels based on 
+    a probability threshold.
+
+    Args:
+        tsv_file (str): 
+            Path to the TSV file. The file should be tab-separated and must contain 
+            a 'physical_position' column along with ancestry probability values.
+        num_ancestries (int): 
+            Number of distinct ancestries in the dataset.
+        prob_thresh (float): 
+            Probability threshold for assigning ancestry to an individual at a 
+            specific position.
+        positions (list of int): 
+            List of genomic positions corresponding to the SNP data.
+        gt_matrix (np.ndarray of shape (n_snps, n_samples)): 
+            Genome matrix indicating reference/alternate alleles for individuals 
+            across genomic positions.
+        rs_IDs (list of str): 
+            List of SNP identifiers corresponding to genomic positions.
+
+    Returns:
+        Tuple:
+            - np.ndarray of shape (n_snps, n_samples): 
+                An ancestry matrix indicating the ancestry assignment for each 
+                individual at each genomic position.
+            - np.ndarray of shape (n_snps, n_samples): 
+                The updated genotype matrix after aligning with TSV positions.
+            - list of str: 
+                The updated list of SNP identifiers. 
     """
     start_time = time.time()
+    # Load TSV file, skipping the first row
     df_tsv = pd.read_csv(tsv_file, sep="\t", skiprows=1)
+
+    # Extract physical positions and remove unnecessary columns
     tsv_positions = df_tsv['physical_position'].tolist()
     df_tsv.drop(columns = ['physical_position', 'chromosome', 'genetic_position', 'genetic_marker_index'], inplace=True)
+
+    # Convert DataFrame to NumPy array
     tsv_matrix = df_tsv.values
+
+    # Find the range of positions that match between TSV and provided positions
     i_start = positions.index(tsv_positions[0])
     if tsv_positions[-1] in positions:
         i_end = positions.index(tsv_positions[-1]) + 1
     else:
         i_end = len(positions)
+
+    # Update genome data to match the TSV file range
     gt_matrix = gt_matrix[i_start:i_end, :]
     positions = positions[i_start:i_end]
     rs_IDs = rs_IDs[i_start:i_end]
+
+    # Initialize probability matrix with the same shape as filtered positions
     prob_matrix = np.zeros((len(positions), tsv_matrix.shape[1]), dtype=np.float16)
 
+    # Align TSV probabilities with genomic positions
     i_tsv = -1
     next_pos_tsv = tsv_positions[i_tsv+1]
     for i in range(len(positions)):
@@ -108,33 +161,58 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, gt_matrix, 
                 next_pos_tsv = tsv_positions[i_tsv+1]
         prob_matrix[i, :] = probs
 
+    # Replace TSV matrix with aligned probability matrix
     tsv_matrix = prob_matrix
+
+    # Initialize ancestry matrix
     ancestry_matrix = np.zeros((tsv_matrix.shape[0], int(tsv_matrix.shape[1] / num_ancestries)), dtype=np.int8)
+
+    # Assign ancestry based on probability threshold
     for i in range(num_ancestries):
         ancestry = i+1
         ancestry_matrix += (tsv_matrix[:, i::num_ancestries] > prob_thresh) * 1 * ancestry
+
+    # Adjust ancestry values to start at 0
     ancestry_matrix -= 1
+
+    # Convert ancestry matrix to string format
     ancestry_matrix = ancestry_matrix.astype(str)
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
+    
     return ancestry_matrix, gt_matrix, rs_IDs
+
 
 def process_tsv_msp(laiobj, positions, chromosomes, gt_matrix, rs_IDs):
     """                                                                                       
-    tsv_msp File Processing                                                 
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    tsv_file       : string with the path of our tsv file.    
-    positions      :
-    gt_matrix      : (m,n) array
-                     Genome matrix indicating ref/alt letter for individual n
-                     at position m.
+    Process the TSV/MSP file to extract ancestry information.
 
-    Returns                                                                                   
-    -------   
-    ancestry_matrix  : (m, n) array
-                  Viterbi Matrix indicating the ancestry for individual n at
-                  position m.                                                                                                                               
+    This function processes a TSV-formatted Local Ancestry Inference (LAI) object 
+    containing ancestry segment data. It aligns the ancestry data with the provided 
+    genomic positions and assigns ancestry labels accordingly.
+
+    Args:
+        laiobj (dict): 
+            A LocalAncestryObject instance.
+        positions (list of int): 
+            An array containing the chromosomal positions for each SNP.
+        chromosomes (list of int): 
+            An array containing the chromosome for each SNP.
+        gt_matrix (np.ndarray of shape (n_snps, n_samples)): 
+            Genome matrix indicating reference/alternate alleles for individuals 
+            across genomic positions.
+        rs_IDs (list of str): 
+            List of SNP identifiers corresponding to genomic positions.
+
+    Returns:
+        Tuple:
+            - np.ndarray of shape (n_snps, n_samples): 
+                An ancestry matrix where `n_snps` represents the number of genomic 
+                positions and `n_samples` represents the number of individuals. 
+                Ancestry values are assigned based on LAI data.
+            - np.ndarray of shape (n_snps, n_samples): 
+                The updated genotype matrix after aligning with LAI positions.
+            - list of str: 
+                The updated list of SNP identifiers.                                                                                             
     """
     start_time = time.time()
     
@@ -152,8 +230,6 @@ def process_tsv_msp(laiobj, positions, chromosomes, gt_matrix, rs_IDs):
     positions = positions[i_start:i_end]
     rs_IDs = rs_IDs[i_start:i_end]
 
-    # -------
-
     tsv_chromosomes = laiobj['chromosomes']
     ancestry_matrix = np.zeros((len(positions), tsv_matrix.shape[1]), dtype=np.int8)
     i_tsv = -1
@@ -170,40 +246,12 @@ def process_tsv_msp(laiobj, positions, chromosomes, gt_matrix, rs_IDs):
                 next_chrom_tsv = tsv_chromosomes[i_tsv+1]
 
         ancestry_matrix[i, :] = ancs
-    
-    # ----------------
-
-    '''
-    # Initialize ancestry_matrix
-    ancestry_matrix = np.zeros((len(positions), tsv_matrix.shape[1]), dtype=tsv_matrix.dtype)
-
-    print("A", tsv_spos[:2], len(tsv_spos), sorted(tsv_spos)==tsv_spos)
-    print("B", positions[:2], len(positions), sorted(positions)==positions)
-
-    # Use searchsorted to find indices where positions should be inserted into tsv_spos
-    inds = np.searchsorted(tsv_spos, positions, side='right') - 1
-
-    print(inds)
-    print(np.unique(inds))
-
-    # Handle positions before the first tsv_spos
-    inds_valid = inds >= 0
-
-    print(sum(~inds_valid))
-
-    # Assign ancestry data to ancestry_matrix
-    ancestry_matrix[inds_valid, :] = tsv_matrix[inds[inds_valid], :]
-        
-    #print(ancestry_matrix.sum(axis=0))
-    #print("\n", sum(ancestry_matrix != ancestry_matrix2))
-    #print("\n", np.unique(ancestry_matrix2, return_counts=True))
-    #print("\n", np.unique(ancestry_matrix, return_counts=True))
-    '''
 
     ancestry_matrix = ancestry_matrix.astype(str)
     
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
     return ancestry_matrix, gt_matrix, rs_IDs
+
 
 def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
     """                                                                                       
@@ -263,6 +311,7 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
     logging.info("Beagle Processing Time: --- %s seconds ---" % (time.time() - start_time))
 
     return gt_matrix, ind_IDs, rs_IDs, rs_ID_dict
+
 
 def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     """                                                                                       
@@ -325,7 +374,6 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     return gt_matrix, ind_IDs, rs_IDs, positions, rs_ID_dict
 
 
-###########################################################################
 def mask(ancestry_matrix, gt_matrix, unique_ancestries, dict_ancestries, average_strands = False):
     """                                                                                       
     Masking Function for each of the available ancestries.                                               
@@ -338,7 +386,7 @@ def mask(ancestry_matrix, gt_matrix, unique_ancestries, dict_ancestries, average
     gt_matrix         : (m, n) array
                         Genetic matrix indicating the encoding for individual n at 
                         poisition m. 
-    unique_ancestries : list of u distinct unique ancestries in our ancestry file.
+    unique_ancestries : list of distinct unique ancestries in our ancestry file.
     average_strands   : Boolean to combine haplotypes for each individuals.
 
     Returns                                                                                   
@@ -366,6 +414,7 @@ def mask(ancestry_matrix, gt_matrix, unique_ancestries, dict_ancestries, average
         start_time = time.time()
     return masked_matrices
 
+
 def average_parent_snps(matrix):
     """                                                                                       
     Combining Haplotypes Function.                                               
@@ -388,7 +437,7 @@ def average_parent_snps(matrix):
     logging.info("Combining time --- %s seconds ---" % (time.time() - start))
     return new_matrix
 
-###########################################################################
+
 def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_msptsv,
                       is_mixed, is_masked, num_ancestries, average_strands, prob_thresh, rs_ID_dict, rsid_or_chrompos):
     """                                                                                       
@@ -428,7 +477,6 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
     rs_ID_dict       :
                        Encoding dictionary for each of the positions in dataset.             
     """
-    
     if beagle_or_vcf == 1:
         gt_matrix, ind_IDs, rs_IDs, rs_ID_dict = process_beagle(snpobj, rs_ID_dict, rsid_or_chrompos)
     elif beagle_or_vcf == 2:
@@ -543,7 +591,7 @@ def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_
         
     return masks, rs_ID_list, ind_ID_list
 
-###########################################################################
+
 def remove_AB_indIDs(ind_IDs):
     new_ind_IDs = []
     for i in range(int(len(ind_IDs)/2)):
@@ -652,11 +700,12 @@ def process_labels_weights(labels_file, masks, rs_ID_list, ind_ID_list, average_
                  labels=label_list, weights=weight_list, protocol=4)
     return masks, ind_ID_list, label_list, weight_list
 
+
 def center_masked_matrix(masked_matrix):
     masked_matrix -= np.nanmean(masked_matrix, axis=0)
     return masked_matrix
 
-###########################################################################
+
 def logger_config(verbose=True):
     logging_config = {"version": 1, "disable_existing_loggers": False}
     fmt = '[%(levelname)s] %(asctime)s: %(message)s'
