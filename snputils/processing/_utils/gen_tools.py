@@ -88,7 +88,7 @@ def process_fbk(fbk_file, num_ancestries, prob_thresh):
     return ancestry_matrix
 
 
-def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, gt_matrix, rs_IDs):
+def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, calldata_gt, rs_IDs):
     """                                                                                       
     Process the TSV/FB file to extract ancestry information.
 
@@ -107,9 +107,8 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, gt_matrix, 
             specific position.
         positions (list of int): 
             List of genomic positions corresponding to the SNP data.
-        gt_matrix (np.ndarray of shape (n_snps, n_samples)): 
-            Genome matrix indicating reference/alternate alleles for individuals 
-            across genomic positions.
+        calldata_gt (np.ndarray of shape (n_snps, n_samples)): 
+            An array containing genotype data for each sample.
         rs_IDs (list of str): 
             List of SNP identifiers corresponding to genomic positions.
 
@@ -142,7 +141,7 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, gt_matrix, 
         i_end = len(positions)
 
     # Update genome data to match the TSV file range
-    gt_matrix = gt_matrix[i_start:i_end, :]
+    calldata_gt = calldata_gt[i_start:i_end, :]
     positions = positions[i_start:i_end]
     rs_IDs = rs_IDs[i_start:i_end]
 
@@ -179,10 +178,10 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, positions, gt_matrix, 
     ancestry_matrix = ancestry_matrix.astype(str)
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
     
-    return ancestry_matrix, gt_matrix, rs_IDs
+    return ancestry_matrix, calldata_gt, rs_IDs
 
 
-def process_tsv_msp(laiobj, positions, chromosomes, gt_matrix, rs_IDs):
+def process_tsv_msp(laiobj, positions, chromosomes, calldata_gt, rs_IDs):
     """                                                                                       
     Process the TSV/MSP file to extract ancestry information.
 
@@ -197,7 +196,7 @@ def process_tsv_msp(laiobj, positions, chromosomes, gt_matrix, rs_IDs):
             An array containing the chromosomal positions for each SNP.
         chromosomes (list of int): 
             An array containing the chromosome for each SNP.
-        gt_matrix (np.ndarray of shape (n_snps, n_samples)): 
+        calldata_gt (np.ndarray of shape (n_snps, n_samples)): 
             Genome matrix indicating reference/alternate alleles for individuals 
             across genomic positions.
         rs_IDs (list of str): 
@@ -226,7 +225,7 @@ def process_tsv_msp(laiobj, positions, chromosomes, gt_matrix, rs_IDs):
     else:
         i_end = len(positions)
     
-    gt_matrix = gt_matrix[i_start:i_end, :]
+    calldata_gt = calldata_gt[i_start:i_end, :]
     positions = positions[i_start:i_end]
     rs_IDs = rs_IDs[i_start:i_end]
 
@@ -250,7 +249,7 @@ def process_tsv_msp(laiobj, positions, chromosomes, gt_matrix, rs_IDs):
     ancestry_matrix = ancestry_matrix.astype(str)
     
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
-    return ancestry_matrix, gt_matrix, rs_IDs
+    return ancestry_matrix, calldata_gt, rs_IDs
 
 
 def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
@@ -265,7 +264,7 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
 
     Returns                                                                                   
     -------   
-    gt_matrix.  : (m, n) array
+    calldata_gt.  : (m, n) array
                   Genetic matrix indicating the encoding for individual n at 
                   poisition m. 
     ind_IDs     : (n,) array
@@ -294,7 +293,7 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
                 sys.exit("Illegal value for rsid_or_chrompos. Choose 1 for rsID format or 2 for Chromosome_position format.")
             lis_beagle.append(x_split[2:])
     
-    gt_matrix = np.zeros((len(lis_beagle),len(lis_beagle[0])), dtype=np.float16)
+    calldata_gt = np.zeros((len(lis_beagle),len(lis_beagle[0])), dtype=np.float16)
     
     processed_IDs = rs_ID_dict.keys()
     for i in range(len(lis_beagle)):
@@ -306,11 +305,11 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
             rs_ID_dict[rs_IDs[i]] = ref
 
         for j in range(1, len(lis_beagle[i])):
-            gt_matrix[i, j] = (lis_beagle[i][j] != ref)*1
+            calldata_gt[i, j] = (lis_beagle[i][j] != ref)*1
 
     logging.info("Beagle Processing Time: --- %s seconds ---" % (time.time() - start_time))
 
-    return gt_matrix, ind_IDs, rs_IDs, rs_ID_dict
+    return calldata_gt, ind_IDs, rs_IDs, rs_ID_dict
 
 
 def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
@@ -325,7 +324,7 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
 
     Returns                                                                                   
     -------   
-    gt_matrix.  : (m, n) array
+    calldata_gt.  : (m, n) array
                   Genetic matrix indicating the encoding for individual n at 
                   poisition m. 
     ind_IDs     : (n,) array
@@ -339,8 +338,8 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     start_time = time.time()
     gt = snpobj['calldata_gt']
     n_variants, n_samples, ploidy = gt.shape
-    gt_matrix = gt.reshape(n_variants, n_samples * ploidy).astype(np.float16)
-    np.place(gt_matrix, gt_matrix < 0, np.nan)
+    calldata_gt = gt.reshape(n_variants, n_samples * ploidy).astype(np.float16)
+    np.place(calldata_gt, calldata_gt < 0, np.nan)
     if rsid_or_chrompos == 1:
         IDs = snpobj['variants_id']
         rs_IDs = [int(x[2:]) for x in IDs]
@@ -368,13 +367,13 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
             ref = ref_vcf[i]
             rs_ID_dict[rs_ID] = ref
         if ref != ref_vcf[i]:
-            gt_matrix[i, :] = 1 - gt_matrix[i, :]
+            calldata_gt[i, :] = 1 - calldata_gt[i, :]
     
     logging.info("VCF Processing Time: --- %s seconds ---" % (time.time() - start_time))
-    return gt_matrix, ind_IDs, rs_IDs, positions, rs_ID_dict
+    return calldata_gt, ind_IDs, rs_IDs, positions, rs_ID_dict
 
 
-def mask(ancestry_matrix, gt_matrix, unique_ancestries, dict_ancestries, average_strands = False):
+def mask(ancestry_matrix, calldata_gt, unique_ancestries, dict_ancestries, average_strands = False):
     """                                                                                       
     Masking Function for each of the available ancestries.                                               
                                                                                                
@@ -383,7 +382,7 @@ def mask(ancestry_matrix, gt_matrix, unique_ancestries, dict_ancestries, average
     ancestry_matrix   : (m, n) array
                         Ancestry Matrix indicating the ancestry for individual n at
                         position m. 
-    gt_matrix         : (m, n) array
+    calldata_gt         : (m, n) array
                         Genetic matrix indicating the encoding for individual n at 
                         poisition m. 
     unique_ancestries : list of distinct unique ancestries in our ancestry file.
@@ -404,7 +403,7 @@ def mask(ancestry_matrix, gt_matrix, unique_ancestries, dict_ancestries, average
         masked = np.empty(ancestry_matrix.shape[0] * ancestry_matrix.shape[1], dtype = np.float16)
         masked[:] = np.nan
         arg = ancestry_matrix.reshape(-1) == ancestry
-        masked[arg] = gt_matrix.reshape(-1)[arg]
+        masked[arg] = calldata_gt.reshape(-1)[arg]
         logging.info("Masking for ancestry " + str(ancestry) + " --- %s seconds ---" % (time.time() - start_time))
 
         if (average_strands == True):
@@ -478,13 +477,13 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
                        Encoding dictionary for each of the positions in dataset.             
     """
     if beagle_or_vcf == 1:
-        gt_matrix, ind_IDs, rs_IDs, rs_ID_dict = process_beagle(snpobj, rs_ID_dict, rsid_or_chrompos)
+        calldata_gt, ind_IDs, rs_IDs, rs_ID_dict = process_beagle(snpobj, rs_ID_dict, rsid_or_chrompos)
     elif beagle_or_vcf == 2:
-        gt_matrix, ind_IDs, rs_IDs, positions, rs_ID_dict = process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos)
+        calldata_gt, ind_IDs, rs_IDs, positions, rs_ID_dict = process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos)
         
     if is_masked and vit_or_fbk_or_fbtsv_or_msptsv != 0:
         
-        ancestry_matrix, gt_matrix, rs_IDs = process_tsv_msp(laiobj, positions, snpobj['variants_chrom'], gt_matrix, rs_IDs)
+        ancestry_matrix, calldata_gt, rs_IDs = process_tsv_msp(laiobj, positions, snpobj['variants_chrom'], calldata_gt, rs_IDs)
 
         if vit_or_fbk_or_fbtsv_or_msptsv == 1 or vit_or_fbk_or_fbtsv_or_msptsv == 2:
             unique_ancestries = [str(i) for i in np.arange(1, num_ancestries+1)]
@@ -494,7 +493,7 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
             dict_ancestries = [str(i) for i in np.arange(0, num_ancestries)]
         else:
             dict_ancestries = unique_ancestries
-        masked_matrices = mask(ancestry_matrix, gt_matrix, unique_ancestries, dict_ancestries, average_strands)
+        masked_matrices = mask(ancestry_matrix, calldata_gt, unique_ancestries, dict_ancestries, average_strands)
     
     else:
         if not is_masked:
@@ -505,12 +504,12 @@ def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_mspt
             dict_ancestries = [str(i) for i in np.arange(1, num_ancestries+1)]
         masked_matrices = {}
         if average_strands:
-            gt_matrix_avg = average_parent_snps(gt_matrix)
+            calldata_gt_avg = average_parent_snps(calldata_gt)
             for ancestry in dict_ancestries:
-                masked_matrices[ancestry] = gt_matrix_avg
+                masked_matrices[ancestry] = calldata_gt_avg
         else:
             for ancestry in dict_ancestries:
-                masked_matrices[ancestry] = gt_matrix
+                masked_matrices[ancestry] = calldata_gt
         logging.info("No masking")
         
     return masked_matrices, ind_IDs, rs_IDs, rs_ID_dict
