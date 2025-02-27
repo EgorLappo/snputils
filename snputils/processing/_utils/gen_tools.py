@@ -190,7 +190,7 @@ def process_laiobj(laiobj, variants_pos, variants_chrom, calldata_gt, variants_i
     assigns ancestry labels accordingly.
 
     Args:
-        laiobj (dict): 
+        laiobj (LocalAncestryObject): 
             A LocalAncestryObject instance.
         variants_pos (list of int): 
             A list containing the chromosomal positions for each SNP.
@@ -274,12 +274,12 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
         beagle_file (str): 
             Path to the Beagle file containing genotype data.
         rs_ID_dict (dict): 
-            Dictionary mapping variant identifiers to their reference alleles. 
+            Dictionary mapping variant identifiers to reference alleles.
             If an identifier is not found, it will be added to the dictionary.
         rsid_or_chrompos (int): 
-            Format specification for variant identifiers:
-            - `1`: Use rsID format.
-            - `2`: Use Chromosome_Position format.
+            Specifies the format of variant identifiers:
+            - `1`: rsID format (e.g., "rs12345").
+            - `2`: Uses Chromosome_Position format (e.g., "1.12345" for chromosome 1, position 12345).
 
     Returns:
         Tuple:
@@ -292,7 +292,7 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
             - list of int or float: 
                 List of variant identifiers, formatted based on `rsid_or_chrompos` selection.
             - dict: 
-                Updated reference allele dictionary mapping variant identifiers to reference alleles.
+                Updated dictionary mapping variant identifiers to reference alleles.
     """
     start_time = time.time()
     variants_id = []
@@ -335,23 +335,23 @@ def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
     return calldata_gt, ind_IDs, variants_id, rs_ID_dict
 
 
-def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
+def process_snpobj(snpobj, rs_ID_dict, rsid_or_chrompos):
     """                                                                                       
-    Process a VCF file to extract genotype and variant information.
+    Extract and format genotype data from a SNPObject.
 
-    This function processes a VCF file to extract genotypic data, reformat variant identifiers, 
-    and encode genetic information into a structured genotype matrix.
+    This function processes genetic variant data from a SNPObject, restructuring genotype information, 
+    formatting variant identifiers, and ensuring consistency in allele encoding.
 
     Args:
-        snpobj (dict): 
+        snpobj (SNPObjects): 
             A SNPObject instance.
         rs_ID_dict (dict): 
-            Dictionary mapping variant identifiers to their reference alleles. 
+            Dictionary mapping variant identifiers to reference alleles. 
             If an identifier is not found, it will be added to the dictionary.
         rsid_or_chrompos (int): 
-            Format specification for variant identifiers:
-            - `1`: Use rsID format.
-            - `2`: Use Chromosome_Position format.
+            Specifies the format of variant identifiers:
+            - `1`: rsID format (e.g., "rs12345").
+            - `2`: Uses Chromosome_Position format (e.g., "1.12345" for chromosome 1, position 12345).
 
     Returns:
         Tuple:
@@ -366,7 +366,7 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
             - list of int: 
                 List of genomic positions corresponding to the variants.
             - dict: 
-                Updated reference allele dictionary mapping variant identifiers to reference alleles.
+                Updated dictionary mapping variant identifiers to reference alleles.
     """
     start_time = time.time()
 
@@ -511,21 +511,23 @@ def get_masked_matrix(
     ):
     """
     Args:
-        snpobj (str): 
+        snpobj (SNPObject): 
             A SNPObject instance.
-        laiobj: 
-            A LocalAncestryObject instance.s
+        laiobj (LocalAncestryObject): 
+            A LocalAncestryObject instance.
         is_masked (bool): 
             If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
             corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
         n_ancestries (int): 
             Number of unique ancestry groups in the dataset.
         average_strands (bool): 
-            Whether to average haplotype data for each individual.
+            Whether to average haplotypes for each individual.
         rs_ID_dict (dict): 
-            Dictionary mapping SNP identifiers to previous encodings.
-        rsid_or_chrompos: 
-            Specifies whether to use RS IDs or chromosome-position identifiers.
+            Dictionary mapping variant identifiers to reference alleles.
+        rsid_or_chrompos (int): 
+            Specifies the format of variant identifiers:
+            - `1`: rsID format (e.g., "rs12345").
+            - `2`: Uses Chromosome_Position format (e.g., "1.12345" for chromosome 1, position 12345).
 
     Returns:
         tuple:
@@ -539,9 +541,13 @@ def get_masked_matrix(
             - rs_ID_dict (dict): 
                 Updated mapping of SNP identifiers to encoded positions.
     """
-    calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict = process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos)
-        
+    # Process the genetic variant data from a SNPObject, restructure genotype information, 
+    # format variant identifiers, and ensure consistency in allele encoding
+    calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict = process_snpobj(snpobj, rs_ID_dict, rsid_or_chrompos)
+    
     if is_masked:
+        # Process the LocalAncestryObject containing ancestry segment data
+        # Align the ancestry data with the provided genomic positions and assign ancestry labels accordingly
         ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
         unique_ancestries = [str(i) for i in np.arange(0, n_ancestries)]
         ancestry_int_list = unique_ancestries
@@ -566,41 +572,33 @@ def get_masked_matrix(
     return masked_matrices, ind_IDs, variants_id, rs_ID_dict
 
 
-def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, num_arrays=1): 
+def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos): 
     """                                                                                       
-    Dataset processing of each of the individual arrays.                                               
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    beagle_vcf_file  : string
-                       Beagle/VCF Filename defined by user.
-    vit_fbk_tsv_file : string
-                       Viterbi/TSV/FBK Filename defined by user.
-    vit_or_fbk_or_tsv: int
-                       indicates file type 1=vit, 2=fbk, 3=tsv
-    fb_or_msp        : int
-                       indicates 1=fb, 2=msp     
-    num_arrays       : Total number of arrays in dataset.
-    n_ancestries   : Number of unique ancestries in dataset. 
-    average_strands  : boolean
-                       Indicates whether to combine haplotypes for each individual.
-    is_masked        : boolean
-                       If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
-                        corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
-    save_masks       : boolean
-                       indicates if mask files needs to be saved.
-    masks_file       : string
-                       npz filename defined by user to save the mask files.
-                                                                                   
-    Returns                                                                                   
-    -------                                                                                   
-    masks      : (num_arrays, ) list                                                                          
-                 List of masked matrices for each ancestries at each given array.
-    rs_ID_list : (num_arrays, ) list 
-                 List of rs IDs for each of the processed arrays.
-    ind_ID_list: 
-                 List of individual IDs for each of the processed arrays.
+    Compute ancestry-based masked genotype matrixes, SNP identifiers, and individual IDs.
 
+    Args:
+        snpobj (SNPObject): 
+            A SNPObject instance.
+        laiobj (LocalAncestryObject): 
+            A LocalAncestryObject instance.
+        average_strands (bool): 
+            Whether to average haplotypes for each individual.
+        is_masked (bool): 
+            If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
+            corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
+        rsid_or_chrompos (int): 
+            Specifies the format of variant identifiers:
+            - `1`: rsID format (e.g., "rs12345").
+            - `2`: Uses Chromosome_Position format (e.g., "1.12345" for chromosome 1, position 12345).
+
+    Returns:
+        tuple:
+            - masks (list of np.ndarray): 
+                A list containing masked genotype matrices for each ancestry across the processed arrays.
+            - rs_ID_list (list of list): 
+                A list where each entry contains the SNP identifiers (rs IDs) for a given array.
+            - ind_ID_list (list of np.ndarray): 
+                A list where each entry contains individual IDs for the corresponding array.
     """
     # Initialization:
     rs_ID_dict = {}
@@ -611,20 +609,23 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
     # Obtain number of ancestries in LAI object
     n_ancestries = laiobj.n_ancestries
 
-    for i in range(num_arrays):
-        logging.info("------ Array "+ str(i+1) + " Processing: ------")
-        genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(snpobj, 
-                                                                       laiobj,
-                                                                       is_masked,
-                                                                       n_ancestries, average_strands, rs_ID_dict,
-                                                                       rsid_or_chrompos)
+    logging.info("------ Array Processing: ------")
+    genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(
+        snpobj, 
+        laiobj,
+        is_masked,
+        n_ancestries, 
+        average_strands, 
+        rs_ID_dict,
+        rsid_or_chrompos
+    )
 
-        masks.append(genome_matrix)
-        rs_ID_list.append(variants_id)
-        if (average_strands == False):
-            ind_ID_list.append(ind_IDs)
-        else:
-            ind_ID_list.append(remove_AB_indIDs(ind_IDs))
+    masks.append(genome_matrix)
+    rs_ID_list.append(variants_id)
+    if (average_strands == False):
+        ind_ID_list.append(ind_IDs)
+    else:
+        ind_ID_list.append(remove_AB_indIDs(ind_IDs))
         
     return masks, rs_ID_list, ind_ID_list
 
@@ -646,92 +647,93 @@ def add_AB_indIDs(ind_IDs):
     return new_ind_IDs
 
 
-def process_labels_weights(labels_file, masks, rs_ID_list, ind_ID_list, average_strands, ancestry, min_percent_snps, remove_labels_dict, is_weighted, save_masks, masks_file, num_arrays=1):
+def process_labels_weights(labels_file, masks, rs_ID_list, ind_ID_list, average_strands, ancestry, min_percent_snps, remove_labels_dict, is_weighted, save_masks, masks_file):
     labels_df = pd.read_csv(labels_file, sep='\t')
     labels_df['indID'] = labels_df['indID'].astype(str)
     label_list = []
     weight_list = []
-    for array_ind in range(num_arrays):
-        masked_matrix = masks[array_ind][ancestry]
-        ind_IDs = ind_ID_list[array_ind]
+    
+    masked_matrix = masks[0][ancestry]
+    ind_IDs = ind_ID_list[0]
+    if average_strands:
+        labels = np.array(labels_df['label'][labels_df['indID'].isin(ind_IDs)])
+        label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(ind_IDs)])
+    else:
+        temp_ind_IDs = remove_AB_indIDs(ind_IDs)
+        labels = np.array(labels_df['label'][labels_df['indID'].isin(temp_ind_IDs)])
+        labels = np.repeat(labels, 2)
+        label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(temp_ind_IDs)])
+        label_ind_IDs = add_AB_indIDs(label_ind_IDs)
+    keep_indices = [ind_IDs.tolist().index(x) for x in label_ind_IDs]
+    masked_matrix = masked_matrix[:,keep_indices]
+    ind_IDs = ind_IDs[keep_indices]
+    array_num = 1
+    if not is_weighted:
+        weights = np.ones(len(labels))
+        combinations = np.zeros(len(labels))
+        combination_weights = np.zeros(len(labels))
+    else:
         if average_strands:
-            labels = np.array(labels_df['label'][labels_df['indID'].isin(ind_IDs)])
-            label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(ind_IDs)])
+            weights = np.array(labels_df['weight'][labels_df['indID'].isin(ind_IDs)])
+            if 'combination' in labels_df.columns:
+                combinations = np.array(labels_df['combination'][labels_df['indID'].isin(ind_IDs)])
+            else:
+                combinations = np.zeros(len(weights))
+            if 'combination_weight' in labels_df.columns:
+                combination_weights = np.array(labels_df['combination_weight'][labels_df['indID'].isin(ind_IDs)])
+            else:
+                combination_weights = np.ones(len(weights))
         else:
             temp_ind_IDs = remove_AB_indIDs(ind_IDs)
-            labels = np.array(labels_df['label'][labels_df['indID'].isin(temp_ind_IDs)])
-            labels = np.repeat(labels, 2)
-            label_ind_IDs = np.array(labels_df['indID'][labels_df['indID'].isin(temp_ind_IDs)])
-            label_ind_IDs = add_AB_indIDs(label_ind_IDs)
-        keep_indices = [ind_IDs.tolist().index(x) for x in label_ind_IDs]
-        masked_matrix = masked_matrix[:,keep_indices]
-        ind_IDs = ind_IDs[keep_indices]
-        array_num = array_ind + 1
-        if not is_weighted:
-            weights = np.ones(len(labels))
-            combinations = np.zeros(len(labels))
-            combination_weights = np.zeros(len(labels))
-        else:
-            if average_strands:
-                weights = np.array(labels_df['weight'][labels_df['indID'].isin(ind_IDs)])
-                if 'combination' in labels_df.columns:
-                    combinations = np.array(labels_df['combination'][labels_df['indID'].isin(ind_IDs)])
-                else:
-                    combinations = np.zeros(len(weights))
-                if 'combination_weight' in labels_df.columns:
-                    combination_weights = np.array(labels_df['combination_weight'][labels_df['indID'].isin(ind_IDs)])
-                else:
-                    combination_weights = np.ones(len(weights))
+            weights = np.array(labels_df['weight'][labels_df['indID'].isin(temp_ind_IDs)])
+            weights = np.repeat(weights, 2)
+            if 'combination' in labels_df.columns:
+                combinations = np.array(labels_df['combination'][labels_df['indID'].isin(temp_ind_IDs)])
+                combinations = np.repeat(combinations, 2)
             else:
-                temp_ind_IDs = remove_AB_indIDs(ind_IDs)
-                weights = np.array(labels_df['weight'][labels_df['indID'].isin(temp_ind_IDs)])
-                weights = np.repeat(weights, 2)
-                if 'combination' in labels_df.columns:
-                    combinations = np.array(labels_df['combination'][labels_df['indID'].isin(temp_ind_IDs)])
-                    combinations = np.repeat(combinations, 2)
-                else:
-                    combinations = np.zeros(len(weights))
-                if 'combination_weight' in labels_df.columns:
-                    combination_weights = np.array(labels_df['combination_weight'][labels_df['indID'].isin(temp_ind_IDs)])
-                    combination_weights = np.repeat(combination_weights, 2)
-                else:
-                    combination_weights = np.ones(len(weights))
-        if array_num in remove_labels_dict:
-            remove_labels = remove_labels_dict[array_num]
-            for i in range(len(labels)):
-                if labels[i] in remove_labels:
-                    weights[i] = 0
-        percent_snps = 100 * (1 - np.mean(np.isnan(masked_matrix), axis=0))
-        keep_indices = np.argwhere(percent_snps >= min_percent_snps).flatten()
-        masked_matrix = masked_matrix[:,keep_indices]
-        ind_IDs = ind_IDs[keep_indices]
-        labels = labels[keep_indices]
-        weights = weights[keep_indices]
-        combinations = combinations[keep_indices]
-        combination_weights = combination_weights[keep_indices]
-        keep_indices = np.argwhere(weights > 0).flatten()
-        masked_matrix_new = masked_matrix[:,keep_indices]
-        ind_IDs_new = ind_IDs[keep_indices]
-        labels_new = labels[keep_indices]
-        weights_new = weights[keep_indices]
-        pos_combinations = sorted(set(combinations[combinations > 0]))
-        num_combinations = len(pos_combinations)
-        if num_combinations > 0:
-            for combination in pos_combinations:
-                combined_indices = np.argwhere(combinations == combination)
-                combined_col = np.nanmean(masked_matrix[:,combined_indices], axis=1)
-                masked_matrix_new = np.append(masked_matrix_new, combined_col, axis=1)
-                ind_IDs_new = np.append(ind_IDs_new, 'combined_ind_' + str(combination))
-                labels_new = np.append(labels_new, labels[combined_indices[0][0]])
-                weights_new = np.append(weights_new, combination_weights[combined_indices[0][0]])
-        masked_matrix = masked_matrix_new
-        ind_IDs = ind_IDs_new
-        labels = labels_new
-        weights = weights_new
-        masks[array_ind][ancestry] = masked_matrix
-        ind_ID_list[array_ind] = ind_IDs
-        label_list += labels.tolist()
-        weight_list += weights.tolist()
+                combinations = np.zeros(len(weights))
+            if 'combination_weight' in labels_df.columns:
+                combination_weights = np.array(labels_df['combination_weight'][labels_df['indID'].isin(temp_ind_IDs)])
+                combination_weights = np.repeat(combination_weights, 2)
+            else:
+                combination_weights = np.ones(len(weights))
+    if array_num in remove_labels_dict:
+        remove_labels = remove_labels_dict[array_num]
+        for i in range(len(labels)):
+            if labels[i] in remove_labels:
+                weights[i] = 0
+    percent_snps = 100 * (1 - np.mean(np.isnan(masked_matrix), axis=0))
+    keep_indices = np.argwhere(percent_snps >= min_percent_snps).flatten()
+    masked_matrix = masked_matrix[:,keep_indices]
+    ind_IDs = ind_IDs[keep_indices]
+    labels = labels[keep_indices]
+    weights = weights[keep_indices]
+    combinations = combinations[keep_indices]
+    combination_weights = combination_weights[keep_indices]
+    keep_indices = np.argwhere(weights > 0).flatten()
+    masked_matrix_new = masked_matrix[:,keep_indices]
+    ind_IDs_new = ind_IDs[keep_indices]
+    labels_new = labels[keep_indices]
+    weights_new = weights[keep_indices]
+    pos_combinations = sorted(set(combinations[combinations > 0]))
+    num_combinations = len(pos_combinations)
+    if num_combinations > 0:
+        for combination in pos_combinations:
+            combined_indices = np.argwhere(combinations == combination)
+            combined_col = np.nanmean(masked_matrix[:,combined_indices], axis=1)
+            masked_matrix_new = np.append(masked_matrix_new, combined_col, axis=1)
+            ind_IDs_new = np.append(ind_IDs_new, 'combined_ind_' + str(combination))
+            labels_new = np.append(labels_new, labels[combined_indices[0][0]])
+            weights_new = np.append(weights_new, combination_weights[combined_indices[0][0]])
+    masked_matrix = masked_matrix_new
+    ind_IDs = ind_IDs_new
+    labels = labels_new
+    weights = weights_new
+    masks[0][ancestry] = masked_matrix
+    ind_ID_list[0] = ind_IDs
+    label_list += labels.tolist()
+    weight_list += weights.tolist()
+
     label_list = np.array(label_list)
     weight_list = np.array(weight_list)
     if save_masks:
