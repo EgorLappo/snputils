@@ -413,6 +413,30 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     return calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict
 
 
+def average_parent_snps(ancestry_matrix):
+    """                                                                                       
+    Average haplotypes to obtain genotype data for individuals. 
+    
+    This function combines pairs of haplotypes by computing their mean.
+
+    Args:
+        ancestry_matrix (np.ndarray of shape (n_snps, n_haplotypes)): 
+            The masked matrix for an ancestry, where `m` represents the number of SNPs and `n` 
+            represents the number of haplotypes.
+
+    Returns:
+        np.ndarray of shape (m, n/2):  
+            A new matrix where each pair of haplotypes has been averaged, resulting in genotype 
+            data for individuals instead of haplotypes.
+    """
+    start = time.time()
+    new_matrix = np.zeros((ancestry_matrix.shape[0], int(ancestry_matrix.shape[1]/2)), dtype = np.float16)
+    for i in range(0, ancestry_matrix.shape[1],2):
+        new_matrix[:, int(i/2)] = np.nanmean(ancestry_matrix[:,i:i+2],axis=1, dtype = np.float16)
+    logging.info("Combining time --- %s seconds ---" % (time.time() - start))
+    return new_matrix
+
+
 def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands = False):
     """                                                                                       
     Mask genotype data based on ancestry labels.
@@ -426,9 +450,9 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
         calldata_gt (np.ndarray of shape (n_snps, n_haplotypes)): 
             Genetic matrix encoding the genotype information for haplotypes.
         unique_ancestries (list): 
-            List of distinct ancestries present in the dataset.
+            List of distinct ancestries present in the dataset (e.g., ['0', '1', '2']).
         ancestry_int_list (list): 
-            List of ancestry identifiers.
+            List of ancestry identifiers (e.g., ['0', '1', '2']).
         average_strands (bool, optional): 
             Whether to average haplotypes for each individual. Defaults to `False`.
 
@@ -436,49 +460,39 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
         dict: 
             Dictionary containing masked genetic matrices for each ancestry group.
     """
-
-    print(ancestry_int_list)
-
     start_time = time.time()
+
+    # Dictionary to store masked matrices for each ancestry group
     masked_matrices = {}
+
+    # Iterate through each unique ancestry
     for i in range(len(unique_ancestries)):
-        ancestry = unique_ancestries[i]
+        # Get the ancestry identifier
+        ancestry = unique_ancestries[i] 
+        # Get the corresponding dictionary key
         dict_ancestry = ancestry_int_list[i]
+
+        # Initialize an empty masked array with NaN values
         masked = np.empty(ancestry_matrix.shape[0] * ancestry_matrix.shape[1], dtype = np.float16)
         masked[:] = np.nan
+
+        # Identify positions in the ancestry matrix that match the current ancestry
         arg = ancestry_matrix.reshape(-1) == ancestry
+
+        # Apply masking: retain genotype data only for the matched ancestry
         masked[arg] = calldata_gt.reshape(-1)[arg]
         logging.info("Masking for ancestry " + str(ancestry) + " --- %s seconds ---" % (time.time() - start_time))
 
+        # If averaging strands is enabled, average the SNPs for each individual
         if (average_strands == True):
             masked_matrices[dict_ancestry] = average_parent_snps(masked.reshape(ancestry_matrix.shape).astype(np.float16))    
         else:
+            # Otherwise, store the masked matrix as is
             masked_matrices[dict_ancestry] = masked.reshape(ancestry_matrix.shape).astype(np.float16)
+
         start_time = time.time()
+
     return masked_matrices
-
-
-def average_parent_snps(matrix):
-    """                                                                                       
-    Combining Haplotypes Function.                                               
-                                                                                               
-    Parameters                                                                                
-    ----------                                                                                
-    matrix      : (m, n) array 
-                  The masked matrix for an ancestry. 
-
-    Returns                                                                                   
-    -------   
-    new_matrix  : (m, n/2) array 
-                  The combined masked matrix with the actual number of individuals.
-                                  
-    """
-    start = time.time()
-    new_matrix = np.zeros((matrix.shape[0],int(matrix.shape[1]/2)), dtype = np.float16)
-    for i in range(0,matrix.shape[1],2):
-        new_matrix[:, int(i/2)] = np.nanmean(matrix[:,i:i+2],axis=1, dtype = np.float16)
-    logging.info("Combining time --- %s seconds ---" % (time.time() - start))
-    return new_matrix
 
 
 def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_msptsv,
