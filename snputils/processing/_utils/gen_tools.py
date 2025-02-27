@@ -413,27 +413,31 @@ def process_vcf(snpobj, rs_ID_dict, rsid_or_chrompos):
     return calldata_gt, ind_IDs, variants_id, positions, rs_ID_dict
 
 
-def average_parent_snps(ancestry_matrix):
+def average_parent_snps(masked_ancestry_matrix):
     """                                                                                       
     Average haplotypes to obtain genotype data for individuals. 
     
     This function combines pairs of haplotypes by computing their mean.
 
     Args:
-        ancestry_matrix (np.ndarray of shape (n_snps, n_haplotypes)): 
-            The masked matrix for an ancestry, where `m` represents the number of SNPs and `n` 
-            represents the number of haplotypes.
+        masked_ancestry_matrix (np.ndarray of shape (n_snps, n_haplotypes)): 
+            The masked matrix for an ancestry, where `n_snps` represents the number of SNPs and 
+            `n_haplotypes` represents the number of haplotypes.
 
     Returns:
-        np.ndarray of shape (m, n/2):  
+        np.ndarray of shape (n_snps, n_samples):  
             A new matrix where each pair of haplotypes has been averaged, resulting in genotype 
             data for individuals instead of haplotypes.
     """
     start = time.time()
-    new_matrix = np.zeros((ancestry_matrix.shape[0], int(ancestry_matrix.shape[1]/2)), dtype = np.float16)
-    for i in range(0, ancestry_matrix.shape[1],2):
-        new_matrix[:, int(i/2)] = np.nanmean(ancestry_matrix[:,i:i+2],axis=1, dtype = np.float16)
+    # Initialize a new matrix with half the number of columns
+    new_matrix = np.zeros((masked_ancestry_matrix.shape[0], int(masked_ancestry_matrix.shape[1]/2)), dtype = np.float16)
+    
+    # Iterate through haplotype pairs, computing the mean for each pair
+    for i in range(0, masked_ancestry_matrix.shape[1], 2):
+        new_matrix[:, int(i/2)] = np.nanmean(masked_ancestry_matrix[:,i:i+2],axis=1, dtype = np.float16)
     logging.info("Combining time --- %s seconds ---" % (time.time() - start))
+    
     return new_matrix
 
 
@@ -446,7 +450,8 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
 
     Args:
         ancestry_matrix (np.ndarray of shape (n_snps, n_haplotypes)): 
-            Matrix indicating the ancestry assignment for individual `n_haplotypes` at position `n_snps`.
+            Matrix indicating the ancestry assignments, where `n_snps` represents the number of SNPs and 
+            `n_haplotypes` represents the number of haplotypes.
         calldata_gt (np.ndarray of shape (n_snps, n_haplotypes)): 
             Genetic matrix encoding the genotype information for haplotypes.
         unique_ancestries (list): 
@@ -496,7 +501,7 @@ def mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, ave
 
 
 def get_masked_matrix(snpobj, beagle_or_vcf, laiobj, vit_or_fbk_or_fbtsv_or_msptsv,
-                      is_mixed, is_masked, num_ancestries, average_strands, prob_thresh, rs_ID_dict, rsid_or_chrompos):
+                      is_mixed, is_masked, num_ancestries, average_strands, rs_ID_dict, rsid_or_chrompos):
     """                                                                                       
     Input Parameter Parser                                                
                                                                                                
@@ -634,7 +639,7 @@ def array_process(snpobj, laiobj, average_strands, prob_thresh, is_masked, rsid_
         genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(snpobj, beagle_or_vcf_list[i],
                                                                        laiobj,
                                                                        vit_or_fbk_or_fbtsv_or_msptsv_list[i], is_mixed, is_masked,
-                                                                       num_ancestries, average_strands, prob_thresh, rs_ID_dict,
+                                                                       num_ancestries, average_strands, rs_ID_dict,
                                                                        rsid_or_chrompos)
 
 
