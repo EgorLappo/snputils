@@ -43,7 +43,7 @@ def process_vit(vit_file):
     return ancestry_matrix
 
 
-def process_fbk(fbk_file, num_ancestries, prob_thresh):    
+def process_fbk(fbk_file, n_ancestries, prob_thresh):    
     """                                                                                       
     Process the FBK file to extract ancestry information.
 
@@ -55,7 +55,7 @@ def process_fbk(fbk_file, num_ancestries, prob_thresh):
         fbk_file (str): 
             Path to the FBK file. The file should be space-separated, where each 
             row represents a genomic position, and columns contain probability values.
-        num_ancestries (int): 
+        n_ancestries (int): 
             Number of distinct ancestries in the dataset.
         prob_thresh (float): 
             Probability threshold for assigning ancestry to an individual at a 
@@ -74,12 +74,12 @@ def process_fbk(fbk_file, num_ancestries, prob_thresh):
     fbk_matrix = df_fbk.values[:, :-1]
     
     # Initialize ancestry matrix with zeros
-    ancestry_matrix = np.zeros((fbk_matrix.shape[0], int(fbk_matrix.shape[1] / num_ancestries)), dtype=np.int8)
+    ancestry_matrix = np.zeros((fbk_matrix.shape[0], int(fbk_matrix.shape[1] / n_ancestries)), dtype=np.int8)
     
     # Assign ancestry based on probability threshold
-    for i in range(num_ancestries):
+    for i in range(n_ancestries):
         ancestry = i+1
-        ancestry_matrix += (fbk_matrix[:, i::num_ancestries] > prob_thresh) * 1 * ancestry
+        ancestry_matrix += (fbk_matrix[:, i::n_ancestries] > prob_thresh) * 1 * ancestry
     
     # Convert ancestry values to string format
     ancestry_matrix = ancestry_matrix.astype(str)
@@ -88,7 +88,7 @@ def process_fbk(fbk_file, num_ancestries, prob_thresh):
     return ancestry_matrix
 
 
-def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, variants_pos, calldata_gt, variants_id):
+def process_tsv_fb(tsv_file, n_ancestries, prob_thresh, variants_pos, calldata_gt, variants_id):
     """                                                                                       
     Process the TSV/FB file to extract ancestry information.
 
@@ -100,7 +100,7 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, variants_pos, calldata
         tsv_file (str): 
             Path to the TSV file. The file should be tab-separated and must contain 
             a 'physical_position' column along with ancestry probability values.
-        num_ancestries (int): 
+        n_ancestries (int): 
             Number of distinct ancestries in the dataset.
         prob_thresh (float): 
             Probability threshold for assigning ancestry to an individual at a 
@@ -164,12 +164,12 @@ def process_tsv_fb(tsv_file, num_ancestries, prob_thresh, variants_pos, calldata
     tsv_matrix = prob_matrix
 
     # Initialize ancestry matrix
-    ancestry_matrix = np.zeros((tsv_matrix.shape[0], int(tsv_matrix.shape[1] / num_ancestries)), dtype=np.int8)
+    ancestry_matrix = np.zeros((tsv_matrix.shape[0], int(tsv_matrix.shape[1] / n_ancestries)), dtype=np.int8)
 
     # Assign ancestry based on probability threshold
-    for i in range(num_ancestries):
+    for i in range(n_ancestries):
         ancestry = i+1
-        ancestry_matrix += (tsv_matrix[:, i::num_ancestries] > prob_thresh) * 1 * ancestry
+        ancestry_matrix += (tsv_matrix[:, i::n_ancestries] > prob_thresh) * 1 * ancestry
 
     # Adjust ancestry values to start at 0
     ancestry_matrix -= 1
@@ -504,25 +504,21 @@ def get_masked_matrix(
         snpobj, 
         laiobj, 
         is_masked, 
-        num_ancestries, 
+        n_ancestries, 
         average_strands, 
         rs_ID_dict, 
         rsid_or_chrompos
     ):
-    """                                                                                       
-    Generate masked or unmasked genetic matrices based on ancestry data.
-
-    This function processes genetic data from Beagle or VCF files, applies ancestry-based masking 
-    if required, and returns genotype matrices along with individual and variant identifiers.
-
+    """
     Args:
         snpobj (str): 
             A SNPObject instance.
         laiobj: 
-            Local ancestry inference object, used for ancestry-based masking.
+            A LocalAncestryObject instance.s
         is_masked (bool): 
-            Whether ancestry-based masking should be applied.
-        num_ancestries (int): 
+            If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
+            corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
+        n_ancestries (int): 
             Number of unique ancestry groups in the dataset.
         average_strands (bool): 
             Whether to average haplotype data for each individual.
@@ -547,15 +543,15 @@ def get_masked_matrix(
         
     if is_masked:
         ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
-        unique_ancestries = [str(i) for i in np.arange(0, num_ancestries)]
+        unique_ancestries = [str(i) for i in np.arange(0, n_ancestries)]
         ancestry_int_list = unique_ancestries
         masked_matrices = mask(ancestry_matrix, calldata_gt, unique_ancestries, ancestry_int_list, average_strands)
     
     else:
         if not is_masked:
-            ancestry_int_list = [str(i) for i in np.arange(1, num_ancestries+1)]
+            ancestry_int_list = [str(i) for i in np.arange(1, n_ancestries+1)]
         else:
-            ancestry_int_list = [str(i) for i in np.arange(0, num_ancestries)]
+            ancestry_int_list = [str(i) for i in np.arange(0, n_ancestries)]
 
         masked_matrices = {}
         if average_strands:
@@ -585,11 +581,12 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
     fb_or_msp        : int
                        indicates 1=fb, 2=msp     
     num_arrays       : Total number of arrays in dataset.
-    num_ancestries   : Number of unique ancestries in dataset. 
+    n_ancestries   : Number of unique ancestries in dataset. 
     average_strands  : boolean
                        Indicates whether to combine haplotypes for each individual.
     is_masked        : boolean
-                       indicates if output matrix needs to be masked. 
+                       If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
+                        corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
     save_masks       : boolean
                        indicates if mask files needs to be saved.
     masks_file       : string
@@ -612,14 +609,14 @@ def array_process(snpobj, laiobj, average_strands, is_masked, rsid_or_chrompos, 
     ind_ID_list = []
 
     # Obtain number of ancestries in LAI object
-    num_ancestries = laiobj.n_ancestries
+    n_ancestries = laiobj.n_ancestries
 
     for i in range(num_arrays):
         logging.info("------ Array "+ str(i+1) + " Processing: ------")
         genome_matrix, ind_IDs, variants_id, rs_ID_dict = get_masked_matrix(snpobj, 
                                                                        laiobj,
                                                                        is_masked,
-                                                                       num_ancestries, average_strands, rs_ID_dict,
+                                                                       n_ancestries, average_strands, rs_ID_dict,
                                                                        rsid_or_chrompos)
 
         masks.append(genome_matrix)
