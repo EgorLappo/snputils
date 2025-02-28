@@ -615,15 +615,20 @@ def process_labels_weights(
     handling group-based adjustments.
 
     Steps:
-      1. Load label/weight data and convert 'indID' to string type.
-      2. Build a fast lookup dictionary for haplotype indices.
-      3. Handle strand averaging or duplication.
-      4. Align genotype matrix columns with the filtered/processed 'indID's.
-      5. Apply or default weights (if is_weighted).
-      6. Remove unwanted labels and individuals based on min_percent_snps.
-      7. Remove individuals with zero weight.
-      8. Combine individuals if 'combination' > 0, adding new columns in one step.
-      9. Update mask, haplotypes, labels, weights, and optionally save.
+      1. Load label/weight data: Read labels from a `.tsv` file and convert individual identifiers (`indID`) to string.
+      2. Align genotype matrix columns: Reorder columns in the genotype matrix (`mask[ancestry]`) to match 
+         the sequence of individuals (`indID`) from the labels file.
+      3. Assign weights: If `is_weighted=True`, assign weights from the `combination_weight` column of `labels_file`; 
+         otherwise, all individuals receive a default weight of `1.0`.
+      4. Filter individuals based on SNP coverage (`min_percent_snps`) and remove unwanted groups: 
+         Compute the percentage of non-missing SNPs per individual from `mask[ancestry]`. Any individual 
+         with SNP coverage below `min_percent_snps` is removed. Additionally, individuals belonging to 
+         groups listed in `groups_to_remove` are excluded by setting their weight to `0`.
+      5. Remove individuals with zero weight: After filtering, any remaining individuals with a weight of `0` 
+         are removed from `mask[ancestry]`, `haplotypes`, `labels`, and `weights`.
+      6. Identify individuals assigned to the same `combination` group, average their genotype data, and create a new merged individual. 
+         The new entry is appended to `mask[ancestry]`, and its weight is assigned using `combination_weight`.
+      7. Update and optionally save the processed mask, haplotypes, labels, and weights.
 
     Args:
         labels_file (str, optional): 
