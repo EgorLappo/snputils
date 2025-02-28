@@ -36,6 +36,7 @@ class mdPCA:
         is_weighted: bool = False,
         groups_to_remove: List[str] = None,
         min_percent_snps: float = 4,
+        group_snp_frequencies_only: bool = True,
         save_masks: bool = False,
         load_masks: bool = False,
         masks_file: Union[str, pathlib.Path] = 'masks.npz',
@@ -71,10 +72,15 @@ class mdPCA:
             laiobj (LAIObject, optional): 
                 A LAIObject instance.
             labels_file (str, optional): 
-                Path to the labels file in .tsv format. The first column, `indID`, contains the individual identifiers, and the second 
-                column, `label`, specifies the groups for all individuals. If `is_weighted=True`, a `weight` column with individual 
-                weights is required. Optionally, `combination` and `combination_weight` columns can specify sets of individuals to be 
-                combined into groups, with respective weights.
+                Path to a `.tsv` file with metadata on individuals, including population labels, optional weights, and groupings. 
+                The `indID` column must contain unique individual identifiers matching those in `laiobj` and `snpobj` for proper alignment. 
+                The `label` column assigns population groups. If `is_weighted=True`, a `weight` column must be provided, assigning a weight to 
+                each individual, where those with a weight of zero are removed. Optional columns include `combination` and `combination_weight` 
+                to aggregate individuals into combined groups, where SNP frequencies represent their sequences. The `combination` column assigns 
+                each individual to a specific group (0 for no combination, 1 for the first group, 2 for the second, etc.). All members of a group 
+                must share the same `label` and `combination_weight`. If `combination_weight` column is not provided, the combinations are 
+                assigned a default weight of `1`. Individuals excluded via `groups_to_remove` or those falling below `min_percent_snps` are removed 
+                from the analysis.
             ancestry (str, optional): 
                 Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
             is_masked (bool, default=True): 
@@ -83,12 +89,15 @@ class mdPCA:
             average_strands (bool, default=False): 
                 True if the haplotypes from the two parents are to be combined (averaged) for each individual, or False otherwise.
             is_weighted (bool, default=False): 
-                True if weights are provided in the labels file, or False otherwise.
+                If `True`, assigns individual weights from the `weight` column in `labels_file`. Otherwise, all individuals have equal weight of `1`.
             groups_to_remove (list of str, optional): 
                 List with groups to exclude from analysis. Example: ['group1', 'group2'].
             min_percent_snps (float, default=4): 
-                Minimum percentage of SNPs that must be known for an individual to be included in the analysis.
+                Minimum percentage of SNPs that must be known for an individual and of the ancesstry of interet to be included in the analysis.
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
+            group_snp_frequencies_only (bool, default=True):
+                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, when `is_weighted` is True and 
+                `combined` is provided in the `labels_file`. False if mdPCA is to be performed using both individual-level and group-level data.
             save_masks (bool, default=False): 
                 True if the masked matrices are to be saved in a `.npz` file, or False otherwise.
             load_masks (bool, default=False): 
@@ -117,6 +126,7 @@ class mdPCA:
         self.__is_weighted = is_weighted
         self.__groups_to_remove = groups_to_remove
         self.__min_percent_snps = min_percent_snps
+        self.__group_snp_frequencies_only = group_snp_frequencies_only
         self.__save_masks = save_masks
         self.__load_masks = load_masks
         self.__masks_file = masks_file
@@ -326,6 +336,26 @@ class mdPCA:
         Update `min_percent_snps`.
         """
         self.__min_percent_snps = x
+
+    @property
+    def group_snp_frequencies_only(self) -> bool:
+        """
+        Retrieve `group_snp_frequencies_only`.
+        
+        Returns:
+            **bool:** 
+                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, 
+                when `is_weighted` is True and `combined` is provided in the `labels_file`. False if mdPCA is to be 
+                performed using both individual-level and group-level data.
+        """
+        return self.__min_percent_snps
+
+    @group_snp_frequencies_only.setter
+    def group_snp_frequencies_only(self, x: bool) -> None:
+        """
+        Update `group_snp_frequencies_only`.
+        """
+        self.__group_snp_frequencies_only = x
 
     @property
     def save_masks(self) -> bool:
@@ -988,6 +1018,7 @@ class mdPCA:
                 self.average_strands,
                 self.ancestry,
                 self.min_percent_snps,
+                self.group_snp_frequencies_only,
                 self.groups_to_remove,
                 self.is_weighted,
                 self.save_masks,
