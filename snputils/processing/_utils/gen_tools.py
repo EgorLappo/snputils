@@ -181,7 +181,7 @@ def process_tsv_fb(tsv_file, n_ancestries, prob_thresh, variants_pos, calldata_g
     return ancestry_matrix, calldata_gt, variants_id
 
 
-def process_laiobj(laiobj, variants_pos, variants_chrom, calldata_gt, variants_id):
+def process_laiobj(laiobj, snpobj):
     """                                                                                       
     Obtain a SNP-level ancestry matrix by matching genomic positions and chromosomes in the SNPObject 
     with ancestry segments in the LocalAncestryObject.
@@ -203,60 +203,12 @@ def process_laiobj(laiobj, variants_pos, variants_chrom, calldata_gt, variants_i
             - np.ndarray of shape (n_snps, n_samples): 
                 An ancestry matrix where `n_snps` represents the number of genomic 
                 positions and `n_samples` represents the number of individuals. 
-                Ancestry values are assigned based on LAI data.
-            - np.ndarray of shape (n_snps, n_samples): 
-                The updated genotype matrix after aligning with LAI positions.
-            - list of str: 
-                The updated list of SNP identifiers.                                                                                             
+                Ancestry values are assigned based on LAI data.                                                                                          
     """
     start_time = time.time()
-    
-    # Extract start and end positions of ancestry segments
-    tsv_spos = laiobj['physical_pos'][:,0].tolist()
-    tsv_epos = laiobj['physical_pos'][:,1].tolist()
-    
-    # Extract ancestry matrix from LAI object
-    tsv_matrix = laiobj['lai']
-
-    # Determine index range for matching positions
-    i_start = variants_pos.index(tsv_spos[0])
-    if tsv_epos[-1] in variants_pos:
-        i_end = variants_pos.index(tsv_epos[-1])
-    else:
-        i_end = len(variants_pos)
-    
-    # Update genotype matrix and associated metadata
-    calldata_gt = calldata_gt[i_start:i_end, :]
-    variants_pos = variants_pos[i_start:i_end]
-    variants_id = variants_id[i_start:i_end]
-
-    # Extract chromosome information from LAI object
-    tsv_chromosomes = laiobj['chromosomes']
-
-     # Initialize ancestry matrix
-    ancestry_matrix = np.zeros((len(variants_pos), tsv_matrix.shape[1]), dtype=np.int8)
-
-    # Variables for iterating through ancestry data
-    i_tsv = -1
-    next_pos_tsv = tsv_spos[i_tsv+1]
-    next_chrom_tsv = tsv_chromosomes[i_tsv+1]
-
-    # Assign ancestry based on genomic position and chromosome alignment
-    for i, pos in enumerate(variants_pos):
-        if pos >= next_pos_tsv and int(variants_chrom[i]) == int(next_chrom_tsv) and i_tsv + 1 < tsv_matrix.shape[0]:
-            i_tsv += 1
-            ancs = tsv_matrix[i_tsv, :]
-            if i_tsv + 1 < tsv_matrix.shape[0]:
-                next_pos_tsv = tsv_spos[i_tsv+1]
-                next_chrom_tsv = tsv_chromosomes[i_tsv+1]
-
-        ancestry_matrix[i, :] = ancs
-
-    # Convert ancestry matrix to string format
-    ancestry_matrix = ancestry_matrix.astype(str)
-    
+    ancestry_matrix = laiobj.convert_to_snp_level(snpobj, lai_format='2D').calldata_lai
     logging.info("TSV Processing Time: --- %s seconds ---" % (time.time() - start_time))
-    return ancestry_matrix, calldata_gt, variants_id
+    return ancestry_matrix
 
 
 def process_beagle(beagle_file, rs_ID_dict, rsid_or_chrompos):
@@ -337,8 +289,6 @@ def process_snpobj(snpobj, rsid_or_chrompos):
     Process genotype data from a SNPObject:
     - Reshape the 3D genotype array (n_snps, n_samples, 2) to 2D (n_snps, n_samples × 2). 
     - Replace missing values (-1) with NaN.
-    - Reshape the 3D genotype array (n_snps, n_samples, 2) into a 2D matrix (n_snps, n_samples × 2) and replace missing values (-1) with NaN.
-    - Replace missing genotype values (indicated by -1) with NaN.
     - Generate variant identifiers using either the rsID or chromosome_position format, based on a provided flag.
     - Create diploid sample identifiers by appending "_A" and "_B" to each sample.
 
@@ -363,8 +313,6 @@ def process_snpobj(snpobj, rsid_or_chrompos):
                 Array of individual IDs corresponding to the genotype matrix.
             - list of int or float: 
                 List of variant identifiers, formatted based on `rsid_or_chrompos` selection.
-            - list of int: 
-                List of genomic positions corresponding to the variants.
     """
     start_time = time.time()
 
@@ -393,11 +341,8 @@ def process_snpobj(snpobj, rsid_or_chrompos):
     # Generate individual IDs for diploid samples
     ind_IDs = np.array([f"{sample}_{suffix}" for sample in samples for suffix in ["A", "B"]])
     
-    # Extract variant positions
-    positions = snpobj['variants_pos'].tolist()
-    
     logging.info("SNPObject Processing Time: --- %s seconds ---" % (time.time() - start_time))
-    return calldata_gt, ind_IDs, variants_id, positions
+    return calldata_gt, ind_IDs, variants_id
 
 
 def average_parent_snps(masked_ancestry_matrix):
@@ -566,12 +511,12 @@ def process_calldata_gt(snpobj, laiobj, ancestry, average_strands, is_masked, rs
     logging.info("------ Array Processing: ------")
     
     # Extract genotype data, sample identifiers, variant identifiers, and positions from the SNPObject
-    calldata_gt, haplotypes, variants_id, positions = process_snpobj(snpobj, rsid_or_chrompos)
+    calldata_gt, haplotypes, variants_id = process_snpobj(snpobj, rsid_or_chrompos)
 
     if is_masked:
         # Obtain a SNP-level ancestry matrix by matching genomic positions and chromosomes in the SNPObject 
         # with ancestry segments in the LocalAncestryObject
-        ancestry_matrix, calldata_gt, variants_id = process_laiobj(laiobj, positions, snpobj['variants_chrom'], calldata_gt, variants_id)
+        ancestry_matrix = process_laiobj(laiobj, snpobj)
         # Mask the genotype matrix by retaining only the entries that match a given ancestry
         mask = mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands)
     else:
