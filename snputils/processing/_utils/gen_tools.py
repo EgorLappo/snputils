@@ -345,31 +345,49 @@ def process_snpobj(snpobj, rsid_or_chrompos):
     return calldata_gt, ind_IDs, variants_id
 
 
-def average_parent_snps(masked_ancestry_matrix):
+def average_parent_snps(masked_ancestry_matrix, force_nan_incomplete_strands=False):
     """                                                                                       
     Average haplotypes to obtain genotype data for individuals. 
-    
+
     This function combines pairs of haplotypes by computing their mean.
+    If `force_nan_incomplete_strands=True`, the result is set to NaN if either haplotype in a pair is NaN.
+    Otherwise, it computes the mean ignoring NaN values.
 
     Args:
         masked_ancestry_matrix (np.ndarray of shape (n_snps, n_haplotypes)): 
-            The masked matrix for an ancestry, where `n_snps` represents the number of SNPs and 
-            `n_haplotypes` represents the number of haplotypes.
+            The masked matrix for an ancestry, where n_snps represents the number of SNPs and 
+            n_haplotypes represents the number of haplotypes.
+        force_nan_incomplete_strands (bool): 
+            If `True`, sets the result to NaN if either haplotype in a pair is NaN. 
+            Otherwise, computes the mean while ignoring NaNs (e.g., 0|NaN -> 0, 1|NaN -> 1).
 
     Returns:
         np.ndarray of shape (n_snps, n_samples):  
             A new matrix where each pair of haplotypes has been averaged, resulting in genotype 
             data for individuals instead of haplotypes.
     """
-    # Assuming masked_ancestry_matrix is defined
     rows, cols = masked_ancestry_matrix.shape
 
-    # Reshape the matrix to group pairs of adjacent columns
-    masked_ancestry_matrix = masked_ancestry_matrix.reshape(rows, cols // 2, 2)    
-    return np.nanmean(masked_ancestry_matrix, axis=2, dtype=np.float16)
+    # Reshape the matrix to group pairs of adjacent columns (each individual has 2 haplotypes)
+    reshaped_matrix = masked_ancestry_matrix.reshape(rows, cols // 2, 2)
+
+    if force_nan_incomplete_strands:
+        # Identify pairs where at least one strand is NaN
+        nan_mask = np.any(np.isnan(reshaped_matrix), axis=2)
+
+        # Compute mean while ignoring NaNs
+        avg_matrix = np.nanmean(reshaped_matrix, axis=2, dtype=np.float16)
+
+        # Apply NaN mask: Set to NaN if either haplotype was NaN
+        avg_matrix[nan_mask] = np.nan
+    else:
+        # Compute mean, allowing np.nanmean to handle missing values
+        avg_matrix = np.nanmean(reshaped_matrix, axis=2, dtype=np.float16)
+
+    return avg_matrix
 
 
-def mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands=False):
+def mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands=False, force_nan_incomplete_strands=False):
     """
     Mask the genotype matrix by retaining only the entries that match a given ancestry.
 
@@ -387,6 +405,9 @@ def mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands=Fal
             Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
         average_strands (bool, default=False): 
             Whether to average haplotypes for each individual. Default is `False`.
+        force_nan_incomplete_strands (bool): 
+            If True, sets the result to NaN if either haplotype in a pair is NaN.
+            If False, computes the mean while ignoring NaNs.
 
     Returns:
         - mask (dict of str to np.ndarray): 
@@ -417,7 +438,7 @@ def mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands=Fal
     # If averaging strands is enabled, compute the average SNP values per individual
     if average_strands:
         start = time.time()
-        mask[ancestry] = average_parent_snps(mask[ancestry])
+        mask[ancestry] = average_parent_snps(mask[ancestry], force_nan_incomplete_strands)
         logging.info("Combining time --- %s seconds ---" % (time.time() - start))
 
     return mask
@@ -465,7 +486,7 @@ def add_AB_indIDs(ind_IDs):
     return new_ind_IDs
 
 
-def process_calldata_gt(snpobj, laiobj, ancestry, average_strands, is_masked, rsid_or_chrompos): 
+def process_calldata_gt(snpobj, laiobj, ancestry, average_strands, force_nan_incomplete_strands, is_masked, rsid_or_chrompos): 
     """                                                                                       
     Process genotype data with optional ancestry-based masking and return the corresponding 
     SNP and individual identifiers.
@@ -486,6 +507,9 @@ def process_calldata_gt(snpobj, laiobj, ancestry, average_strands, is_masked, rs
             Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
         average_strands (bool): 
             Whether to average haplotypes for each individual.
+        force_nan_incomplete_strands (bool): 
+            If `True`, sets the result to NaN if either haplotype in a pair is NaN. 
+            Otherwise, computes the mean while ignoring NaNs (e.g., 0|NaN -> 0, 1|NaN -> 1).
         is_masked (bool): 
             If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
             corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
@@ -518,7 +542,7 @@ def process_calldata_gt(snpobj, laiobj, ancestry, average_strands, is_masked, rs
         # with ancestry segments in the LocalAncestryObject
         ancestry_matrix = process_laiobj(laiobj, snpobj)
         # Mask the genotype matrix by retaining only the entries that match a given ancestry
-        mask = mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands)
+        mask = mask_calldata_gt(ancestry_matrix, calldata_gt, ancestry, average_strands, force_nan_incomplete_strands)
     else:
         # If averaging strands is enabled, compute the average SNP values per individual
         if average_strands:

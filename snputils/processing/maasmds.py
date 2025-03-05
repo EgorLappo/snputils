@@ -26,9 +26,11 @@ class maasMDS:
             ancestry,
             is_masked: bool = True,
             average_strands: bool = False,
+            force_nan_incomplete_strands: bool = False,
             is_weighted: bool = False,
             groups_to_remove: Dict[int, List[str]] = {},
             min_percent_snps: float = 4,
+            group_snp_frequencies_only: bool = True,
             save_masks: bool = False,
             load_masks: bool = False,
             masks_file: Union[str, pathlib.Path] = 'masks.npz',
@@ -54,6 +56,9 @@ class maasMDS:
                 corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
             average_strands (bool, default=False): 
                 True if the haplotypes from the two parents are to be combined (averaged) for each individual, or False otherwise.
+            force_nan_incomplete_strands (bool): 
+                If `True`, sets the result to NaN if either haplotype in a pair is NaN. 
+                Otherwise, computes the mean while ignoring NaNs (e.g., 0|NaN -> 0, 1|NaN -> 1).
             is_weighted (bool, default=False): 
                 True if weights are provided in the labels file, or False otherwise.
             groups_to_remove (dict of int to list of str, default={}): 
@@ -63,6 +68,9 @@ class maasMDS:
             min_percent_snps (float, default=4.0): 
                 Minimum percentage of SNPs to be known in an individual for an individual to be included in the analysis. 
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
+            group_snp_frequencies_only (bool, default=True):
+                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, when `is_weighted` is True and 
+                `combined` is provided in the `labels_file`. False if mdPCA is to be performed using both individual-level and group-level data.
             save_masks (bool, default=False): 
                 True if the masked matrices are to be saved in a `.npz` file, or False otherwise.
             load_masks (bool, default=False): 
@@ -83,8 +91,10 @@ class maasMDS:
         self.__ancestry = ancestry
         self.__is_masked = is_masked
         self.__average_strands = average_strands
+        self.__force_nan_incomplete_strands = force_nan_incomplete_strands
         self.__groups_to_remove = groups_to_remove
         self.__min_percent_snps = min_percent_snps
+        self.__group_snp_frequencies_only = group_snp_frequencies_only
         self.__is_weighted = is_weighted
         self.__save_masks = save_masks
         self.__load_masks = load_masks
@@ -95,6 +105,7 @@ class maasMDS:
         self.__X_new_ = None  # Store transformed SNP data
         self.__haplotypes_ = None  # Store haplotypes after filtering if min_percent_snps > 0
         self.__samples_ = None  # Store samples after filtering if min_percent_snps > 0
+        self.__variants_id_ = None  # Store variants ID (after filtering SNPs not in laiobj)
 
         # Fit and transform if a `snpobj`, `laiobj`, `labels_file`, and `ancestry` are provided
         if self.snpobj is not None and self.laiobj is not None and self.labels_file is not None and self.ancestry is not None:
@@ -234,6 +245,24 @@ class maasMDS:
         self.__average_strands = x
 
     @property
+    def force_nan_incomplete_strands(self) -> bool:
+        """
+        Retrieve `force_nan_incomplete_strands`.
+        
+        Returns:
+            **bool**: If `True`, sets the result to NaN if either haplotype in a pair is NaN.
+                      Otherwise, computes the mean while ignoring NaNs (e.g., 0|NaN -> 0, 1|NaN -> 1).
+        """
+        return self.__force_nan_incomplete_strands
+
+    @force_nan_incomplete_strands.setter
+    def force_nan_incomplete_strands(self, x: bool) -> None:
+        """
+        Update `force_nan_incomplete_strands`.
+        """
+        self.__force_nan_incomplete_strands = x
+
+    @property
     def is_weighted(self) -> bool:
         """
         Retrieve `is_weighted`.
@@ -286,6 +315,26 @@ class maasMDS:
         Update `min_percent_snps`.
         """
         self.__min_percent_snps = x
+
+    @property
+    def group_snp_frequencies_only(self) -> bool:
+        """
+        Retrieve `group_snp_frequencies_only`.
+        
+        Returns:
+            **bool:** 
+                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, 
+                when `is_weighted` is True and `combined` is provided in the `labels_file`. False if mdPCA is to be 
+                performed using both individual-level and group-level data.
+        """
+        return self.__group_snp_frequencies_only
+
+    @group_snp_frequencies_only.setter
+    def group_snp_frequencies_only(self, x: bool) -> None:
+        """
+        Update `group_snp_frequencies_only`.
+        """
+        self.__group_snp_frequencies_only = x
 
     @property
     def save_masks(self) -> bool:
@@ -467,6 +516,26 @@ class maasMDS:
             return [x[:-2] for x in haplotypes]
 
     @property
+    def variants_id_(self) -> Optional[np.ndarray]:
+        """
+        Retrieve `variants_id_`.
+
+        Returns:
+            **array of shape (n_snp,):** 
+                An array containing unique identifiers (IDs) for each SNP,
+                potentially reduced if there are SNPs not present in the `laiboj`.
+                The format will depend on `rsid_or_chrompos`.
+        """
+        return self.__variants_id_
+
+    @variants_id_.setter
+    def variants_id_(self, x: np.ndarray) -> None:
+        """
+        Update `variants_id_`.
+        """
+        self.__variants_id_ = x
+
+    @property
     def n_haplotypes(self) -> Optional[int]:
         """
         Retrieve `n_haplotypes`.
@@ -543,34 +612,38 @@ class maasMDS:
             average_strands = self.average_strands
         
         if not self.is_masked:
-            self.ancestry = '1'
+            self.ancestry = 1
         if self.load_masks:
-            mask, rs_ID_list, ind_ID_list, groups, weights = self._load_masks_file(self.masks_file)
+            mask, variants_id, haplotypes, _, weights = self._load_masks_file(self.masks_file)
         else:
-            mask, rs_ID_list, ind_ID_list = process_calldata_gt(
+            mask, variants_id, haplotypes = process_calldata_gt(
                 self.snpobj,
                 self.laiobj,
                 self.ancestry,
                 self.average_strands,
+                self.force_nan_incomplete_strands,
                 self.is_masked, 
                 self.rsid_or_chrompos
             )
 
-            mask, ind_ID_list, groups, weights = process_labels_weights(
-                self.labels_file, 
-                mask, 
-                rs_ID_list,
-                ind_ID_list, 
-                self.average_strands, 
-                self.ancestry, 
-                self.min_percent_snps, 
+            mask, haplotypes, groups, weights = process_labels_weights(
+                self.labels_file,
+                mask,
+                variants_id,
+                haplotypes,
+                self.average_strands,
+                self.ancestry,
+                self.min_percent_snps,
+                self.group_snp_frequencies_only,
                 self.groups_to_remove,
-                self.is_weighted, 
-                self.save_masks, 
+                self.is_weighted,
+                self.save_masks,
                 self.masks_file
             )
         
         distance_list = [[distance_mat(first=mask[self.ancestry], dist_func=self.distance_type)]]
         
-        self.X_new_ = mds_transform(distance_list, groups, weights, ind_ID_list, self.n_components)
-        self.haplotypes_ = ind_ID_list
+        self.X_new_ = mds_transform(distance_list, groups, weights, haplotypes, self.n_components)
+        
+        self.haplotypes_ = haplotypes
+        self.variants_id_ = variants_id

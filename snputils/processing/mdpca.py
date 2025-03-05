@@ -33,6 +33,7 @@ class mdPCA:
         ancestry: Optional[str] = None,
         is_masked: bool = True,
         average_strands: bool = False,
+        force_nan_incomplete_strands: bool = False,
         is_weighted: bool = False,
         groups_to_remove: List[str] = None,
         min_percent_snps: float = 4,
@@ -88,6 +89,9 @@ class mdPCA:
                 corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
             average_strands (bool, default=False): 
                 True if the haplotypes from the two parents are to be combined (averaged) for each individual, or False otherwise.
+            force_nan_incomplete_strands (bool): 
+                If `True`, sets the result to NaN if either haplotype in a pair is NaN. 
+                Otherwise, computes the mean while ignoring NaNs (e.g., 0|NaN -> 0, 1|NaN -> 1).
             is_weighted (bool, default=False): 
                 If `True`, assigns individual weights from the `weight` column in `labels_file`. Otherwise, all individuals have equal weight of `1`.
             groups_to_remove (list of str, optional): 
@@ -123,6 +127,7 @@ class mdPCA:
         self.__method = method
         self.__is_masked = is_masked
         self.__average_strands = average_strands
+        self.__force_nan_incomplete_strands = force_nan_incomplete_strands
         self.__is_weighted = is_weighted
         self.__groups_to_remove = groups_to_remove
         self.__min_percent_snps = min_percent_snps
@@ -284,6 +289,24 @@ class mdPCA:
         self.__average_strands = x
 
     @property
+    def force_nan_incomplete_strands(self) -> bool:
+        """
+        Retrieve `force_nan_incomplete_strands`.
+        
+        Returns:
+            **bool**: If `True`, sets the result to NaN if either haplotype in a pair is NaN.
+                      Otherwise, computes the mean while ignoring NaNs (e.g., 0|NaN -> 0, 1|NaN -> 1).
+        """
+        return self.__force_nan_incomplete_strands
+
+    @force_nan_incomplete_strands.setter
+    def force_nan_incomplete_strands(self, x: bool) -> None:
+        """
+        Update `force_nan_incomplete_strands`.
+        """
+        self.__force_nan_incomplete_strands = x
+
+    @property
     def is_weighted(self) -> bool:
         """
         Retrieve `is_weighted`.
@@ -348,7 +371,7 @@ class mdPCA:
                 when `is_weighted` is True and `combined` is provided in the `labels_file`. False if mdPCA is to be 
                 performed using both individual-level and group-level data.
         """
-        return self.__min_percent_snps
+        return self.__group_snp_frequencies_only
 
     @group_snp_frequencies_only.setter
     def group_snp_frequencies_only(self, x: bool) -> None:
@@ -1003,6 +1026,7 @@ class mdPCA:
                 self.laiobj,
                 self.ancestry,
                 self.average_strands,
+                self.force_nan_incomplete_strands,
                 self.is_masked,
                 self.rsid_or_chrompos
             )
