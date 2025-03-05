@@ -47,6 +47,10 @@ def load_dataset(
         variants_ids (list[str]): List of variant IDs to load.
         sample_ids (list[str]): List of sample IDs to load.
         verbose (bool): Whether to show progress.
+        **read_kwargs: Keyword arguments to pass to `PGENReader.read()`.
+
+    Returns:
+        SNPObject: SNPObject containing the loaded dataset.
     """
     if isinstance(chromosomes, (str, int)):
         chromosomes = [chromosomes]
