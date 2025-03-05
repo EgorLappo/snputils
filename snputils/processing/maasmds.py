@@ -88,7 +88,7 @@ class maasMDS:
         self.__snpobj = snpobj
         self.__laiobj = laiobj
         self.__labels_file = labels_file
-        self.__ancestry = ancestry
+        self.__ancestry = self._define_ancestry(ancestry, laiobj.ancestry_map)
         self.__is_masked = is_masked
         self.__average_strands = average_strands
         self.__force_nan_incomplete_strands = force_nan_incomplete_strands
@@ -558,6 +558,30 @@ class maasMDS:
                 (`min_percent_snps > 0`).
         """
         return len(np.unique(self.samples_))
+
+    @staticmethod
+    def _define_ancestry(ancestry, ancestry_map):
+        """
+        Determine the ancestry index based on different input types.
+
+        Args:
+            ancestry (int or str): The ancestry input, which can be:
+                - An integer (e.g., 0, 1, 2).
+                - A string representation of an integer (e.g., '0', '1').
+                - A string matching one of the ancestry map values (e.g., 'Africa').
+            ancestry_map (dict): A dictionary mapping ancestry indices (as strings) to ancestry names.
+
+        Returns:
+            int: The corresponding ancestry index.
+        """
+        if isinstance(ancestry, int):  
+            return ancestry  
+        elif isinstance(ancestry, str) and ancestry.isdigit():  
+            return int(ancestry)  
+        elif ancestry in ancestry_map.values():  
+            return int(next(key for key, value in ancestry_map.items() if value == ancestry))  
+        else:  
+            raise ValueError(f"Invalid ancestry input: {ancestry}")
 
     @staticmethod
     def _load_masks_file(masks_file):
