@@ -624,9 +624,11 @@ def process_labels_weights(
         min_percent_snps (float): 
             Minimum percentage of SNPs that must be known for an individual to be included in the analysis.
             All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
-        min_percent_snps (float, default=4): 
-                Minimum percentage of SNPs that must be known for an individual and of the ancesstry of interet to be included in the analysis.
-                All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
+        group_snp_frequencies_only (bool):
+            If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
+            set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are aggregated into groups based on their assigned 
+            labels. If False, mdPCA is performed on individual-level SNP data alone or on both individual-level and group-level SNP frequencies when 
+            `is_weighted` is True and a `combination` column is provided.
         groups_to_remove (list of str): 
             List with groups to exclude from analysis. Example: ['group1', 'group2'].
         is_weighted (bool): 

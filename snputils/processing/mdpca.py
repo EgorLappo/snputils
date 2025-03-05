@@ -17,12 +17,15 @@ from ._utils.iterative_svd import IterativeSVD
 
 class mdPCA:
     """
-    A class for missing data principal component analysis (mdPCA).
+    A class for performing missing data principal component analysis (mdPCA) on SNP data.
 
-    This class supports both separate and averaged strand processing for SNP data. If the `snpobj`, 
-    `laiobj`, `labels_file`, and `ancestry` parameters are all provided during instantiation, 
-    the `fit_transform` method will be automatically called, applying the specified mdPCA method to transform 
-    the data upon instantiation.
+    The mdPCA class focuses on genotype segments from the ancestry of interest when the `is_masked` flag is set to `True`. It offers 
+    flexible processing options, allowing either separate handling of masked haplotype strands or combining (averaging) strands into a 
+    single composite representation for each individual. Moreover, the analysis can be performed on individual-level data, group-level SNP 
+    frequencies, or a combination of both.
+
+    If the `snpobj`, `laiobj`, `labels_file`, and `ancestry` parameters are all provided during instantiation, the `fit_transform` method 
+    will be automatically called, applying the specified mdPCA method to transform the data upon instantiation.
     """
     def __init__(
         self,
@@ -30,7 +33,7 @@ class mdPCA:
         snpobj: Optional['SNPObject'] = None,
         laiobj: Optional['LocalAncestryObject'] = None,
         labels_file: Optional[str] = None,
-        ancestry: Optional[str] = None,
+        ancestry: Optional[Union[int, str]] = None,
         is_masked: bool = True,
         average_strands: bool = False,
         force_nan_incomplete_strands: bool = False,
@@ -82,8 +85,11 @@ class mdPCA:
                 must share the same `label` and `combination_weight`. If `combination_weight` column is not provided, the combinations are 
                 assigned a default weight of `1`. Individuals excluded via `groups_to_remove` or those falling below `min_percent_snps` are removed 
                 from the analysis.
-            ancestry (str, optional): 
-                Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
+            ancestry (int or str, optional): 
+                Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`. The ancestry input can be:
+                - An integer (e.g., 0, 1, 2).
+                - A string representation of an integer (e.g., '0', '1').
+                - A string matching one of the ancestry map values (e.g., 'Africa').
             is_masked (bool, default=True): 
                 If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
                 corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
@@ -100,8 +106,10 @@ class mdPCA:
                 Minimum percentage of SNPs that must be known for an individual and of the ancesstry of interet to be included in the analysis.
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
             group_snp_frequencies_only (bool, default=True):
-                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, when `is_weighted` is True and 
-                `combined` is provided in the `labels_file`. False if mdPCA is to be performed using both individual-level and group-level data.
+                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
+                set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are aggregated into groups based on their assigned 
+                labels. If False, mdPCA is performed on individual-level SNP data alone or on both individual-level and group-level SNP frequencies when 
+                `is_weighted` is True and a `combination` column is provided.
             save_masks (bool, default=False): 
                 True if the masked matrices are to be saved in a `.npz` file, or False otherwise.
             load_masks (bool, default=False): 
@@ -367,9 +375,10 @@ class mdPCA:
         
         Returns:
             **bool:** 
-                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, 
-                when `is_weighted` is True and `combined` is provided in the `labels_file`. False if mdPCA is to be 
-                performed using both individual-level and group-level data.
+                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies 
+                when `is_weighted` is set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are 
+                aggregated into groups based on their assigned labels. If False, mdPCA is performed on individual-level SNP data alone 
+                or on both individual-level and group-level SNP frequencies when `is_weighted` is True and a `combination` column is provided.
         """
         return self.__group_snp_frequencies_only
 

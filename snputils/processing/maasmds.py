@@ -11,7 +11,12 @@ from ._utils.gen_tools import process_calldata_gt, process_labels_weights
 
 class maasMDS:
     """
-    A class for multiple array ancestry-specific multidimensional scaling (maasMDS).
+    A class for performing multiple array ancestry-specific multidimensional scaling (maasMDS) on SNP data.
+
+    The maasMDS class focuses on genotype segments from the ancestry of interest when the `is_masked` flag is set to `True`. It offers 
+    flexible processing options, allowing either separate handling of masked haplotype strands or combining (averaging) strands into a 
+    single composite representation for each individual. Moreover, the analysis can be performed on individual-level data, group-level SNP 
+    frequencies, or a combination of both.
 
     This class supports both separate and averaged strand processing for SNP data. If the `snpobj`, 
     `laiobj`, `labels_file`, and `ancestry` parameters are all provided during instantiation, 
@@ -20,10 +25,10 @@ class maasMDS:
     """
     def __init__(
             self, 
-            snpobj, 
-            laiobj,
-            labels_file,
-            ancestry,
+            snpobj: Optional['SNPObject'] = None,
+            laiobj: Optional['LocalAncestryObject'] = None,
+            labels_file: Optional[str] = None,
+            ancestry: Optional[Union[int, str]] = None,
             is_masked: bool = True,
             average_strands: bool = False,
             force_nan_incomplete_strands: bool = False,
@@ -49,8 +54,11 @@ class maasMDS:
                 column, `label`, specifies the groups for all individuals. If `is_weighted=True`, a `weight` column with individual 
                 weights is required. Optionally, `combination` and `combination_weight` columns can specify sets of individuals to be 
                 combined into groups, with respective weights.
-            ancestry (str, optional): 
-                Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
+            ancestry (int or str, optional): 
+                Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`. The ancestry input can be:
+                - An integer (e.g., 0, 1, 2).
+                - A string representation of an integer (e.g., '0', '1').
+                - A string matching one of the ancestry map values (e.g., 'Africa').
             is_masked (bool, default=True): 
                 If `True`, applies ancestry-specific masking to the genotype matrix, retaining only genotype data 
                 corresponding to the specified `ancestry`. If `False`, uses the full, unmasked genotype matrix.
@@ -69,8 +77,10 @@ class maasMDS:
                 Minimum percentage of SNPs to be known in an individual for an individual to be included in the analysis. 
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
             group_snp_frequencies_only (bool, default=True):
-                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, when `is_weighted` is True and 
-                `combined` is provided in the `labels_file`. False if mdPCA is to be performed using both individual-level and group-level data.
+                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
+                set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are aggregated into groups based on their assigned 
+                labels. If False, mdPCA is performed on individual-level SNP data alone or on both individual-level and group-level SNP frequencies when 
+                `is_weighted` is True and a `combination` column is provided.
             save_masks (bool, default=False): 
                 True if the masked matrices are to be saved in a `.npz` file, or False otherwise.
             load_masks (bool, default=False): 
@@ -323,9 +333,10 @@ class maasMDS:
         
         Returns:
             **bool:** 
-                True if mdPCA is to be performed only on group-level SNP frequencies, excluding individual-level data, 
-                when `is_weighted` is True and `combined` is provided in the `labels_file`. False if mdPCA is to be 
-                performed using both individual-level and group-level data.
+                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies 
+                when `is_weighted` is set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are 
+                aggregated into groups based on their assigned labels. If False, mdPCA is performed on individual-level SNP data alone 
+                or on both individual-level and group-level SNP frequencies when `is_weighted` is True and a `combination` column is provided.
         """
         return self.__group_snp_frequencies_only
 
@@ -638,8 +649,10 @@ class maasMDS:
         if not self.is_masked:
             self.ancestry = 1
         if self.load_masks:
+            # Load precomputed ancestry-based masked genotype matrix, SNP identifiers, haplotype identifiers, and weights
             mask, variants_id, haplotypes, _, weights = self._load_masks_file(self.masks_file)
         else:
+            # Process genotype data with optional ancestry-based masking and return the corresponding SNP and individual identifiers
             mask, variants_id, haplotypes = process_calldata_gt(
                 self.snpobj,
                 self.laiobj,
@@ -650,6 +663,9 @@ class maasMDS:
                 self.rsid_or_chrompos
             )
 
+            # Process individual genomic labels and weights, aligning them with a masked genotype matrix by 
+            # filtering out low-coverage individuals, reordering data to match the matrix structure, and 
+            # handling group-based adjustments
             mask, haplotypes, groups, weights = process_labels_weights(
                 self.labels_file,
                 mask,
