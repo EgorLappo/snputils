@@ -22,6 +22,7 @@ chr_urls = {
     }
 }
 
+
 def available_datasets_list() -> list[str]:
     """
     Get the list of available datasets.
@@ -34,7 +35,8 @@ def load_dataset(
         chromosomes: Union[list[str], list[int], str, int],
         variants_ids: Optional[list[str]] = None,
         sample_ids: Optional[list[str]] = None,
-        verbose: bool = True
+        verbose: bool = True,
+        **read_kwargs
 ) -> SNPObject:
     """
     Load a genome dataset.
@@ -52,12 +54,12 @@ def load_dataset(
 
     if variants_ids is not None:
         variants_ids_txt = tempfile.NamedTemporaryFile(mode='w')
-        variants_ids_txt.write("\n".join(variants_ids).encode())
+        variants_ids_txt.write("\n".join(variants_ids))
         variants_ids_txt.flush()
 
     if sample_ids is not None:
         sample_ids_txt = tempfile.NamedTemporaryFile(mode='w')
-        sample_ids_txt.write("\n".join(sample_ids).encode())
+        sample_ids_txt.write("\n".join(sample_ids))
         sample_ids_txt.flush()
 
     merge_list_txt = tempfile.NamedTemporaryFile(mode='w')
@@ -103,7 +105,7 @@ def load_dataset(
 
         # Read PGEN fileset with PGENReader into SNPObject
         log.info("Reading PGEN fileset...")
-        snpobj = PGENReader(data_path / "1kgp").read()
+        snpobj = PGENReader(data_path / "1kgp").read(**read_kwargs)
     else:
         raise NotImplementedError(f"Dataset {name} not implemented.")
 
