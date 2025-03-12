@@ -1403,6 +1403,65 @@ class SNPObject:
                 snpobj.variants_id[snpobj.variants_id == ''] = '.'
             return snpobj
 
+    def merge(self, snpobj: 'SNPObject') -> 'SNPObject':
+        """
+        Merge `self` with another `snpobj` along the sample axis, assuming:
+        - SNP sets are identical in both objects (same IDs, same order).
+        - No overlapping samples (strictly non-overlapping).
+        - Both objects have genotype arrays with the same shape in the SNP dimension.
+
+        Returns:
+            SNPObject: A new SNPObject containing the merged sample data.
+        """        
+        # Ensure both objects have the same number of SNPs before merging
+        if self.calldata_gt is not None and snpobj.calldata_gt is not None:
+            if self.calldata_gt.shape[0] != snpobj.calldata_gt.shape[0]:
+                raise ValueError("SNPObjects have different numbers of SNPs; cannot merge on samples.")
+            calldata_gt = np.concatenate([self.calldata_gt, snpobj.calldata_gt], axis=1)
+        else:
+            calldata_gt = None  # If one or both are None, maintain None
+
+        # Merge local ancestry inference (LAI) data if present and compatible
+        if self.calldata_lai is not None and snpobj.calldata_lai is not None:
+            if self.calldata_lai.dim != snpobj.calldata_lai.dim:
+                raise ValueError("SNPObjects differ in `calldata_lai` dimensions; cannot merge.")
+            calldata_lai = np.concatenate([self.calldata_lai, snpobj.calldata_lai], axis=1)
+        else:
+            calldata_lai = None  # Maintain None if LAI data is missing in either object
+
+        # Merge sample lists, ensuring there are no duplicate samples
+        if self.samples is not None and snpobj.samples is not None:
+            overlapping_samples = set(self.samples).intersection(set(snpobj.samples))
+            if overlapping_samples:
+                raise ValueError(
+                    f"Cannot merge due to overlapping sample(s): {overlapping_samples}. "
+                    "Samples must be strictly non-overlapping."
+                )
+            samples = np.concatenate([self.samples, snpobj.samples], axis=0)
+        else:
+            samples = None  # Maintain None if samples are missing in either object
+
+        # Ensure consistency in genotype summation between the two objects
+        if self.are_strands_summed and not snpobj.are_strands_summed:
+            raise ValueError("Merging incompatible SNPObjects: `self` has summed strands, but `snpobj` does not.")
+        elif not self.are_strands_summed and snpobj.are_strands_summed:
+            raise ValueError("Merging incompatible SNPObjects: `snpobj` has summed strands, but `self` does not.")
+
+        # Create and return a new SNPObject containing the merged data
+        return SNPObject(
+            calldata_gt=calldata_gt,
+            samples=samples,
+            variants_ref=self.variants_ref,
+            variants_alt=self.variants_alt,
+            variants_chrom=self.variants_chrom,
+            variants_filter_pass=self.variants_filter_pass,
+            variants_id=self.variants_id,
+            variants_pos=self.variants_pos,
+            variants_qual=self.variants_qual,
+            calldata_lai=calldata_lai,
+            ancestry_map=self.ancestry_map
+        )
+
     def convert_to_window_level(
         self,
         window_size: Optional[int] = None,
