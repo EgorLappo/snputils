@@ -257,8 +257,9 @@ class SNPObject:
         Retrieve `calldata_lai`.
 
         Returns:
-            **array of shape (n_snps, n_samples, 2):** 
-                An array containing the ancestry for each SNP.
+            **array:** 
+                An array containing the ancestry for each SNP. This array can be either 2D with shape
+                `(n_snps, n_samples*2)`, or 3D with shape (n_snps, n_samples, 2).
         """
         return self.__calldata_lai
 
