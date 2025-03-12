@@ -1403,15 +1403,23 @@ class SNPObject:
                 snpobj.variants_id[snpobj.variants_id == ''] = '.'
             return snpobj
 
-    def merge(self, snpobj: 'SNPObject') -> 'SNPObject':
+    def merge(self, snpobj: 'SNPObject', force_samples: bool = False, prefix: str = '2') -> 'SNPObject':
         """
         Merge `self` with another `snpobj` along the sample axis, assuming:
         - SNP sets are identical in both objects (same IDs, same order).
-        - No overlapping samples (strictly non-overlapping).
         - Both objects have genotype arrays with the same shape in the SNP dimension.
 
+        Args:
+            snpobj (SNPObject): 
+                The reference SNPObject to compare against.
+            force_samples (bool, default=False): 
+                - If False, merging fails when duplicate sample names are found.
+                - If True, duplicate sample names are resolved by prepending the file index.
+            prefix (str): 
+                Prefix used for renaming duplicate samples in the `snpobj`.
+
         Returns:
-            SNPObject: A new SNPObject containing the merged sample data.
+            **SNPObject**: A new SNPObject containing the merged sample data.
         """        
         # Ensure both objects have the same number of SNPs before merging
         if self.calldata_gt is not None and snpobj.calldata_gt is not None:
@@ -1429,15 +1437,24 @@ class SNPObject:
         else:
             calldata_lai = None  # Maintain None if LAI data is missing in either object
 
-        # Merge sample lists, ensuring there are no duplicate samples
+        # Merge sample lists, handling duplicates if `force_samples=True`
         if self.samples is not None and snpobj.samples is not None:
             overlapping_samples = set(self.samples).intersection(set(snpobj.samples))
             if overlapping_samples:
-                raise ValueError(
-                    f"Cannot merge due to overlapping sample(s): {overlapping_samples}. "
-                    "Samples must be strictly non-overlapping."
-                )
-            samples = np.concatenate([self.samples, snpobj.samples], axis=0)
+                if not force_samples:
+                    raise ValueError(
+                        f"Cannot merge due to overlapping sample(s): {overlapping_samples}. "
+                        "Samples must be strictly non-overlapping or use `force_samples=True`."
+                    )
+                else:
+                    # Rename duplicate samples by prepending the file index
+                    renamed_samples = [
+                        f"{prefix}:{sample}" if sample in overlapping_samples else sample
+                        for sample in snpobj.samples
+                    ]
+                    samples = np.concatenate([self.samples, renamed_samples], axis=0)
+            else:
+                samples = np.concatenate([self.samples, snpobj.samples], axis=0)
         else:
             samples = None  # Maintain None if samples are missing in either object
 
