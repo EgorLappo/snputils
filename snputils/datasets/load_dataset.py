@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, List
 import tempfile
 from pathlib import Path
 
@@ -23,7 +23,7 @@ chr_urls = {
 }
 
 
-def available_datasets_list() -> list[str]:
+def available_datasets_list() -> List[str]:
     """
     Get the list of available datasets.
     """
@@ -32,9 +32,9 @@ def available_datasets_list() -> list[str]:
 
 def load_dataset(
         name: str,
-        chromosomes: Union[list[str], list[int], str, int],
-        variants_ids: Optional[list[str]] = None,
-        sample_ids: Optional[list[str]] = None,
+        chromosomes: Union[List[str], list[int], str, int],
+        variants_ids: Optional[List[str]] = None,
+        sample_ids: Optional[List[str]] = None,
         verbose: bool = True,
         **read_kwargs
 ) -> SNPObject:
@@ -43,9 +43,9 @@ def load_dataset(
 
     Args:
         name (str): Name of the dataset to load. Call `available_datasets_list()` to get the list of available datasets.
-        chromosomes (list[str] | list[int] | str | int): Chromosomes to load.
-        variants_ids (list[str]): List of variant IDs to load.
-        sample_ids (list[str]): List of sample IDs to load.
+        chromosomes (List[str] | list[int] | str | int): Chromosomes to load.
+        variants_ids (List[str]): List of variant IDs to load.
+        sample_ids (List[str]): List of sample IDs to load.
         verbose (bool): Whether to show progress.
         **read_kwargs: Keyword arguments to pass to `PGENReader.read()`.
 
