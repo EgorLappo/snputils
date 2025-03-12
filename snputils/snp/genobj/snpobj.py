@@ -300,7 +300,10 @@ class SNPObject:
         elif self.__calldata_gt is not None:
             return self.__calldata_gt.shape[1]
         elif self.__calldata_lai is not None:
-            return self.__calldata_lai.shape[1]
+            if self.__calldata_lai.ndim == 2:
+                return self.__calldata_lai.shape[1] // 2
+            elif self.__calldata_lai.ndim == 3:
+                return self.__calldata_lai.shape[1]
         else:
             raise ValueError("Unable to determine the total number of samples: no relevant data is available.")
 
@@ -1452,7 +1455,7 @@ class SNPObject:
         if window_size is None and physical_pos is None and laiobj is None:
             raise ValueError("One of `window_size`, `physical_pos`, or `laiobj` must be provided.")
         
-        # 1. Fixed window size
+        # Fixed window size
         if window_size is not None:
             physical_pos = []   # Boundaries [start, end] of each window
             chromosomes = []    # Chromosome for each window
@@ -1489,7 +1492,7 @@ class SNPObject:
             chromosomes = np.array(chromosomes)
             window_sizes = np.array(window_sizes)
         
-        # 2. Custom start and end positions
+        # Custom start and end positions
         elif physical_pos is not None:
             # Check if there is exactly one chromosome
             if chromosomes is None:
@@ -1501,7 +1504,7 @@ class SNPObject:
                 else:
                     raise ValueError("Multiple chromosomes detected, but `chromosomes` was not provided.")
 
-        # 3. Match existing windows to a reference laiobj
+        # Match existing windows to a reference laiobj
         elif laiobj is not None:
             physical_pos = laiobj.physical_pos
             chromosomes = laiobj.chromosomes
