@@ -36,7 +36,7 @@ class SNPObject:
         Args:
             calldata_gt (array, optional): 
                 An array containing genotype data for each sample. This array can be either 2D with shape 
-                `(n_snps, n_samples)` if the paternal and maternal strands are averaged, or 3D with shape 
+                `(n_snps, n_samples)` if the paternal and maternal strands are summed, or 3D with shape 
                 `(n_snps, n_samples, 2)` if the strands are kept separate.
             samples (array of shape (n_sampels,), optional): 
                 An array containing unique sample identifiers.
@@ -102,7 +102,7 @@ class SNPObject:
         Returns:
             **array:** 
                 An array containing genotype data for each sample. This array can be either 2D with shape 
-                `(n_snps, n_samples)` if the paternal and maternal strands are averaged, or 3D with shape 
+                `(n_snps, n_samples)` if the paternal and maternal strands are summed, or 3D with shape 
                 `(n_snps, n_samples, 2)` if the strands are kept separate.
         """
         return self.__calldata_gt
@@ -413,6 +413,36 @@ class SNPObject:
                 for easier reference to public attributes in the instance.
         """
         return [attr.replace('_SNPObject__', '') for attr in vars(self)]
+
+    def sum_strands(self, inplace: bool = False) -> Optional['SNPObject']:
+        """
+        Sum paternal and maternal strands.
+
+        Args:
+            inplace (bool, default=False): 
+                If True, modifies `self` in place. If False, returns a new `SNPObject` with the variants 
+                filtered. Default is False.
+
+        Returns:
+            **Optional[SNPObject]:** 
+                A new `SNPObject` with summed strands if `inplace=False`. 
+                If `inplace=True`, modifies `self` in place and returns None.
+        """
+        if self.calldata_gt is None:
+            warnings.warn("Genotype data `calldata_gt` is None.")
+            return None if not inplace else self
+
+        if self.are_strands_summed:
+            warnings.warn("Genotype data `calldata_gt` is already summed.")
+            return self if inplace else self.copy()
+        
+        if inplace:
+            self.calldata_gt = self.calldata_gt.sum(axis=2, dtype=np.int8)
+            return self
+        else:
+            snpobj = self.copy()
+            snpobj.calldata_gt = self.calldata_gt.sum(axis=2, dtype=np.int8)
+            return snpobj
 
     def filter_variants(
             self, 
@@ -1310,7 +1340,7 @@ class SNPObject:
                         # `calldata_gt`` has a different shape, so it's shuffled along axis 0
                         self[key] = self[key][shuffle_index, ...]
                     elif 'variant' in key:
-                        # Other attributes are 1D arrays
+                        # snpobj attributes are 1D arrays
                         self[key] = np.asarray(self[key])[shuffle_index]
             return None
         else:
