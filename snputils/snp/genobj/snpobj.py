@@ -1513,7 +1513,7 @@ class SNPObject:
         # Allocate an output LAI array
         n_windows = physical_pos.shape[0]
         n_samples = self.n_samples
-        if len(self.calldata_lai.shape) == 3:
+        if self.calldata_lai.ndim == 3:
             lai = np.zeros((n_windows, n_samples, 2))
         else:
             lai = np.zeros((n_windows, n_samples*2))
@@ -1536,7 +1536,7 @@ class SNPObject:
         haplotypes = [f"{sample}.{i}" for sample in self.samples for i in range(2)]
 
         # If original data was (n_snps, n_samples, 2), flatten to (n_windows, n_samples*2)
-        if len(self.calldata_lai.shape) == 3:
+        if self.calldata_lai.ndim == 3:
             lai = lai.reshape(n_windows, -1)
 
         # Aggregate into a LocalAncestryObject
