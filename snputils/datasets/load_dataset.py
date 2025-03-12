@@ -32,7 +32,7 @@ def available_datasets_list() -> List[str]:
 
 def load_dataset(
         name: str,
-        chromosomes: Union[List[str], list[int], str, int],
+        chromosomes: Union[List[str], List[int], str, int],
         variants_ids: Optional[List[str]] = None,
         sample_ids: Optional[List[str]] = None,
         verbose: bool = True,
@@ -43,7 +43,7 @@ def load_dataset(
 
     Args:
         name (str): Name of the dataset to load. Call `available_datasets_list()` to get the list of available datasets.
-        chromosomes (List[str] | list[int] | str | int): Chromosomes to load.
+        chromosomes (List[str] | List[int] | str | int): Chromosomes to load.
         variants_ids (List[str]): List of variant IDs to load.
         sample_ids (List[str]): List of sample IDs to load.
         verbose (bool): Whether to show progress.
