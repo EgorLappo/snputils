@@ -140,7 +140,8 @@ class PGENReader(SNPBaseReader):
                     "ID": pl.String,
                     "REF": pl.String,
                     "ALT": pl.String,
-                }
+                },
+                'null_values': ["NA"],
             }
             if pvar_filename.endswith('.zst'):
                 pvar = pl.read_csv(pvar_filename, **pvar_reading_args).lazy()
@@ -180,6 +181,7 @@ class PGENReader(SNPBaseReader):
                 separator=separator,
                 has_header=psam_has_header,
                 new_columns=None if psam_has_header else ["FID", "IID", "PAT", "MAT", "SEX", "PHENO1"],
+                null_values=["NA"],
             ).with_row_index()
             if "#IID" in psam.columns:
                 psam = psam.rename({"#IID": "IID"})
