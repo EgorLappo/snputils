@@ -37,7 +37,6 @@ dependencies = [
     "plotly_express",
     "kaleido",
     "nbformat",
-    "pong",
     "adjustText",
     "zstandard",
 ]
