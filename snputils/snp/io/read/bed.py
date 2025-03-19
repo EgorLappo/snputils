@@ -101,7 +101,8 @@ class BEDReader(SNPBaseReader):
                     "POS": pl.Int64,
                     "ALT": pl.String,
                     "REF": pl.String
-                }
+                },
+                null_values=["NA"]
             ).with_row_index()
             file_num_variants = bim.height
 
@@ -130,7 +131,8 @@ class BEDReader(SNPBaseReader):
                     "Father ID": pl.String,
                     "Mother ID": pl.String,
                     "Sex code": pl.String,
-                }
+                },
+                null_values=["NA"]
             ).with_row_index()
             file_num_samples = fam.height
 
