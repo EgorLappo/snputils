@@ -103,7 +103,7 @@ class mdPCA:
             groups_to_remove (list of str, optional): 
                 List with groups to exclude from analysis. Example: ['group1', 'group2'].
             min_percent_snps (float, default=4): 
-                Minimum percentage of SNPs that must be known for an individual and of the ancesstry of interet to be included in the analysis.
+                Minimum percentage of SNPs that must be known for an individual and of the ancestry of interest to be included in the analysis.
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
             group_snp_frequencies_only (bool, default=True):
                 If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
