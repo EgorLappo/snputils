@@ -610,7 +610,7 @@ class mdPCA:
         Returns:
             **array of shape (n_snp,):** 
                 An array containing unique identifiers (IDs) for each SNP,
-                potentially reduced if there are SNPs not present in the `laiboj`.
+                potentially reduced if there are SNPs not present in the `laiobj`.
                 The format will depend on `rsid_or_chrompos`.
         """
         return self.__variants_id_
