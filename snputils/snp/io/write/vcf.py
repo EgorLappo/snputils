@@ -134,7 +134,7 @@ class VCFWriter:
                 "##fileformat=VCFv4.1\n",
                 '##FORMAT=<ID=GT,Number=1,Type=String,Description="Phased Genotype">\n',
                 *[f"##contig=<ID={chrom}>\n" for chrom in df["CHROM"].unique()],
-                "#" + "\t".join(df.columns) + "\n"
+                "#" + "\t".join(map(str, df.columns)) + "\n"
             ]))
 
         # Write genotype data
