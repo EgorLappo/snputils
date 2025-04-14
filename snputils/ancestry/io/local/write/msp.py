@@ -50,6 +50,13 @@ class MSPWriter(LAIBaseWriter):
                 If the provided path does not have one of these extensions, the `.msp` extension will be appended.
         """
         return self.__file
+
+    @file.setter
+    def file(self, x: Union[str, Path]):
+        """
+        Update `file`.
+        """
+        self.__file = Path(x)
     
     def write(self) -> None:
         """
