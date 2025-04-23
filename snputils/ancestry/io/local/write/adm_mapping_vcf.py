@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 from typing import Dict, Union, Optional
 from pathlib import Path
+import gc
 
 from snputils.ancestry.genobj.local import LocalAncestryObject
 from snputils.snp.genobj.snpobj import SNPObject
@@ -140,11 +141,16 @@ class AdmixtureMappingVCFWriter:
 
             # Modify LAI data values to simulate a SNP file
             # The positions in LAI corresponding to the current ancestry key are mapped to 1, and the rest to 0
-            match = (self.laiobj.lai == ancestry).astype(int)
+            
+            match = (self.laiobj.lai == ancestry)
+            match = match.view(np.int8)
             match = match.reshape(len(self.laiobj.lai),int(len(self.laiobj.lai[0])/2), 2 )
+
 
             # Set up VCF-related data
             calldata_gt = match
+            del match
+            gc.collect()
             samples = np.array(self.laiobj.samples)
             variants_chrom = self.laiobj.chromosomes
             variants_list = [str(i+1) for i in range(len(self.laiobj.lai))]
