@@ -20,6 +20,7 @@ def latlon_to_nvector(lat, lon):
     z = np.sin(lat_rad)
     return np.stack([x, y, z], axis=-1)
 
+
 def nvector_to_latlon(nvec):
     """
     Convert an n-vector (x,y,z) back to latitude/longitude in DEGREES.

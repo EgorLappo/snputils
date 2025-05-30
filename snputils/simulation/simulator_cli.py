@@ -16,7 +16,6 @@ python3 /home/users/geleta/snputils/snputils/simulation/simulator_cli.py \
     --output-dir /tmp
 """
 
-import os
 import sys
 import argparse
 import logging
