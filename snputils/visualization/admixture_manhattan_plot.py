@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from typing import Optional, Tuple, Dict
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
 
 def manhattan_plot(
     input_file: str, 

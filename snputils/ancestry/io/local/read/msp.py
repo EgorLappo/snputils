@@ -1,7 +1,8 @@
-from pathlib import Path
-from typing import List, Dict, Optional, Union
+import gc
 import logging
 import warnings
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
 
@@ -188,13 +189,15 @@ class MSPReader(LAIBaseReader):
             log.warning("Window sizes ('n snps') not found.")
         
         # Extract LAI data (haplotype-level)
-        lai = msp_df[msp_df.columns[column_counter:]].to_numpy()
+        lai = msp_df.iloc[:, column_counter:].to_numpy(dtype=np.uint8, copy=False)
 
         # Extract haplotype identifiers
         haplotypes = msp_df.columns[column_counter:].to_list()
 
         # Extract haplotype identifiers and sample identifiers
         samples = self._get_samples(msp_df, column_counter)
+        del msp_df
+        gc.collect()
 
         # Validate the number of samples matches the LAI data dimensions
         n_samples = len(samples)

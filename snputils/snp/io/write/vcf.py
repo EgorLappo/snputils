@@ -93,34 +93,12 @@ class VCFWriter:
             data_chrom: The SNPObject instance containing the data for the chromosome.
         """
         # Obtain npy matrix with SNPs
-        npy = data_chrom.calldata_gt
-        length, n_samples, num_strands = npy.shape
-        npy = npy.reshape(length, n_samples*2).T
+        npy3 = data_chrom.calldata_gt  # shape: (n_windows, n_samples, 2)
+        n_windows, n_samples, _ = npy3.shape
 
         # Keep sample names if appropriate
         data_samples = data_chrom.samples if len(data_chrom.samples) == n_samples else [get_name() for _ in range(n_samples)]
 
-        # Metadata
-        df = pd.DataFrame({
-            "CHROM": data_chrom.variants_chrom,
-            "POS": data_chrom.variants_pos,
-            "ID": data_chrom.variants_id,
-            "REF": data_chrom.variants_ref,
-            "ALT": data_chrom.variants_alt,
-            "QUAL": data_chrom.variants_qual,
-            "FILTER": ["PASS"] * length,
-            "INFO": ["."] * length,
-            "FORMAT": ["GT"] * length
-        })
-
-        # Genotype data for each sample "maternal|paternal"
-        column_data = joblib.Parallel(n_jobs=self.__n_jobs)(
-            joblib.delayed(process_genotype)(npy, i, length, self.__phased) for i in range(n_samples)
-        )
-
-        # Create the DataFrame once with all the columns
-        column_data = pd.DataFrame(np.array(column_data).T, columns=data_samples)
-        df = pd.concat([df, column_data], axis=1)
 
         # Format output file
         if chrom == "All":
@@ -128,18 +106,39 @@ class VCFWriter:
         else:
             file = self.__filename.parent / f"{self.__filename.stem}_{chrom}{self.__file_extension}"
 
-        # Write header
-        with open(file, "w") as f:
-            f.write("".join([
-                "##fileformat=VCFv4.1\n",
-                '##FORMAT=<ID=GT,Number=1,Type=String,Description="Phased Genotype">\n',
-                *[f"##contig=<ID={chrom}>\n" for chrom in df["CHROM"].unique()],
-                "#" + "\t".join(map(str, df.columns)) + "\n"
-            ]))
-
-        # Write genotype data
-        df.to_csv(file, sep="\t", index=False, mode="a", header=False)
-
+        # Write VCF file
+        out = open(self.__filename.with_suffix(self.__file_extension), "w")
+        # --- write VCF header ---
+        out.write("##fileformat=VCFv4.1\n")
+        out.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Phased Genotype">\n')
+        
+        for c in set(data_chrom.variants_chrom):
+            out.write(f"##contig=<ID={c}>\n")
+        cols = ["#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO","FORMAT"] + list(data_chrom.samples)
+        out.write("\t".join(cols) + "\n")
+        
+        sep = "|" if self.__phased else "/"
+        for i in range(n_windows):
+            chrom = data_chrom.variants_chrom[i]
+            pos   = data_chrom.variants_pos[i]
+            vid   = data_chrom.variants_id[i]
+            ref   = data_chrom.variants_ref[i]
+            alt   = data_chrom.variants_alt[i]
+        
+            # build genotype list per sample, one small array at a time
+            row = npy3[i]  # shape: (n_samples, 2)
+            genotypes = [
+                f"{row[s,0]}{sep}{row[s,1]}"
+                for s in range(n_samples)
+            ]
+        
+            line = "\t".join([
+                str(chrom), str(pos), vid, ref, alt,
+                ".", "PASS", ".", "GT", *genotypes
+            ])
+            out.write(line + "\n")
+        
+        out.close()
 
 def process_genotype(npy, i, n_snps, phased):
     """
