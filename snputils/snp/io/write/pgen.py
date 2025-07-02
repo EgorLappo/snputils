@@ -108,7 +108,7 @@ class PGENWriter:
         log.info(f"Writing {self.__filename}.psam")
         df = pl.DataFrame(
             {
-                "IID": self.__snpobj.samples,
+                "#IID": self.__snpobj.samples,
                 "SEX": "NA",  # Add SEX as nan for now
                 # TODO: add SEX as Optional column to SNPObject and write it to the .psam file (if not it's lost)
             }
