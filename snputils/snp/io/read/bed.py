@@ -39,23 +39,15 @@ class BEDReader(SNPBaseReader):
             sample_idxs: List of sample indices to read. If None and sample_ids is None, all samples are read.
             variant_ids: List of variant IDs to read. If None and variant_idxs is None, all variants are read.
             variant_idxs: List of variant indices to read. If None and variant_ids is None, all variants are read.
-            sum_strands: True if the maternal and paternal strands are to be summed together,
-                False if the strands are to be stored separately. Note that due to the pgenlib backend, when sum_strands is False,
-                8 times as much RAM is required. Nonetheless, the calldata_gt will only be double the size.
-                WARNING: bed files do not store phase information. If you need it, use vcf or pgen.
+            sum_strands: If True, maternal and paternal strands are combined into a single `int8` array with values `{0, 1, 2`}. 
+                If False, strands are stored separately as an `int8` array with values `{0, 1}` for each strand. 
+                Note: With the pgenlib backend, `False` uses `~8×` more RAM, though `calldata_gt` is only `2×` larger.
             separator: Separator used in the pvar file. If None, the separator is automatically detected.
                 If the automatic detection fails, please specify the separator manually.
 
         Returns:
-            snpobj: SNPObject containing the data from the pgen fileset.
-                If sum_strands is False, calldata_gt is stored as a numpy array of shape
-                (num_variants, num_samples, 2) and dtype int8 containing 0, 1.
-                If sum_strands is True, calldata_gt is stored as a numpy array of shape
-                (num_variants, num_samples) and dtype int8 containing 0, 1, 2.
-
-        Raises:
-            AssertionError: If both sample_idxs and sample_ids are specified.
-            AssertionError: If both variant_idxs and variant_ids are specified.
+            **SNPObject**: 
+                A SNPObject instance.
         """
         assert (
             sample_idxs is None or sample_ids is None

@@ -1,6 +1,4 @@
 import logging
-import pandas as pd
-import numpy as np
 import joblib
 from typing import Union
 from pathlib import Path
@@ -11,23 +9,26 @@ log = logging.getLogger(__name__)
 
 
 class VCFWriter:
-    """Writes a phenotype object in VCF format in the specified output path."""
-
+    """
+    A writer class for exporting SNP data from a `snputils.snp.genobj.SNPObject` 
+    into an `.vcf` file.
+    """
     def __init__(self, snpobj: SNPObject, filename: str, n_jobs: int = -1, phased: bool = False):
         """
-        Parameters
-        ----------
-        snpobj : ``SNPObject`` instance
-            A SNPObject instance.
-        file : str
-            Path to write VCF file.
-        n_jobs : int, default=-1
-            Number of jobs to run in parallel. None means 1 unless in a
-            joblib.parallel_backend context. -1 means using all processors.
-        phased : bool, default=True
-            If True, the genotype data is written in the "maternal|paternal"
-            format. If False, the genotype data is written in the
-            "maternal/paternal" format.
+        Args:
+            snpobj (SNPObject):
+                A SNPObject instance.
+            file (str or pathlib.Path): 
+                Path to the file where the data will be saved. It should end with `.vcf`. 
+                If the provided path does not have this extension, the `.vcf` extension will be appended.
+            n_jobs: 
+                Number of jobs to run in parallel. 
+                - `None`: use 1 job unless within a `joblib.parallel_backend` context.  
+                - `-1`: use all available processors.  
+                - Any other integer: use the specified number of jobs.
+            phased: 
+                If True, genotype data is written in "maternal|paternal" format.  
+                If False, genotype data is written in "maternal/paternal" format.
         """
         self.__snpobj = snpobj
         self.__filename = Path(filename)
@@ -80,11 +81,11 @@ class VCFWriter:
                 data_chrom = data.filter_variants(chrom=chrom, inplace=False)
 
                 log.debug(f'Storing chromosome {chrom}')
-                self.write_chromosome_data(chrom, data_chrom)
+                self._write_chromosome_data(chrom, data_chrom)
         else:
-            self.write_chromosome_data("All", data)
+            self._write_chromosome_data("All", data)
 
-    def write_chromosome_data(self, chrom, data_chrom):
+    def _write_chromosome_data(self, chrom, data_chrom):
         """
         Writes the SNP data for a specific chromosome to a VCF file.
 
@@ -98,7 +99,6 @@ class VCFWriter:
 
         # Keep sample names if appropriate
         data_samples = data_chrom.samples if len(data_chrom.samples) == n_samples else [get_name() for _ in range(n_samples)]
-
 
         # Format output file
         if chrom == "All":
@@ -120,10 +120,10 @@ class VCFWriter:
         sep = "|" if self.__phased else "/"
         for i in range(n_windows):
             chrom = data_chrom.variants_chrom[i]
-            pos   = data_chrom.variants_pos[i]
-            vid   = data_chrom.variants_id[i]
-            ref   = data_chrom.variants_ref[i]
-            alt   = data_chrom.variants_alt[i]
+            pos = data_chrom.variants_pos[i]
+            vid = data_chrom.variants_id[i]
+            ref = data_chrom.variants_ref[i]
+            alt = data_chrom.variants_alt[i]
         
             # build genotype list per sample, one small array at a time
             row = npy3[i]  # shape: (n_samples, 2)
@@ -140,6 +140,7 @@ class VCFWriter:
         
         out.close()
 
+
 def process_genotype(npy, i, n_snps, phased):
     """
     Process the genotype data for a particular individual in "maternal|paternal" 
@@ -151,7 +152,7 @@ def process_genotype(npy, i, n_snps, phased):
         n_snps: Number of SNPs.
 
     Returns:
-        genotype: List with "maternal|paternal" for each SNP.
+        **genotype**: List with "maternal|paternal" for each SNP.
     """
     # Get the genotype data for the specified individual's maternal and paternal SNPs
     maternal = npy[i*2, :].astype(str)     # maternal strand is the even row

@@ -57,15 +57,12 @@ class VCFReader(SNPBaseReader):
             samples: Selection of samples to extract calldata for. If provided, should be
                 a list of strings giving sample identifiers. May also be a list of
                 integers giving indices of selected samples.
-            sum_strands: True if the maternal and paternal strands are to be summed together,
-            False if the strands are to be stored separately.
+            sum_strands: If True, maternal and paternal strands are combined into a single `int8` array with values `{0, 1, 2`}. 
+                If False, strands are stored separately as an `int8` array with values `{0, 1}` for each strand.
 
         Returns:
-            snpobj: SNPObject containing the data from the vcf file.
-                If sum_strands is False, calldata_gt is stored as a numpy array of shape
-                (num_variants, num_samples, 2) and dtype int8 containing 0, 1.
-                If sum_strands is True, calldata_gt is stored as a numpy array of shape
-                (num_variants, num_samples) and dtype int8 containing 0, 1, 2.
+            **SNPObject**: 
+                A SNPObject instance.
         """
         log.info(f"Reading {self.filename}")
 
