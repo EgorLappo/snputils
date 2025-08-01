@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 import numpy as np
 import pandas as pd
-
+import re
 from .base import LAIBaseReader
 from snputils.ancestry.genobj.local import LocalAncestryObject
 
@@ -66,23 +66,40 @@ class MSPReader(LAIBaseReader):
         Construct an ancestry map from the comment line of the `.msp` file.
 
         This method parses the comment string to create a mapping of ancestry numerical identifiers 
-        to their corresponding ancestry names.
+        to their corresponding ancestry names (e.g., '0': 'African').
 
         Args:
             comment (str): 
                 The comment line containing ancestry mapping information.
 
         Returns:
-            dict: A dictionary mapping names to ancestry numbers (as strings).
+            dict: A dictionary mapping ancestry codes (as strings) to ancestry names.
         """
-        # Split the comment to extract relevant ancestry mapping data
-        comment = comment.split(' ')[-1].replace('\n', '').split('\t')
-        ancestry_map = {}
+        comment = comment.strip()
 
-        # Populate the ancestry map with parsed values
-        for elem in comment:
-            x, y = elem.split('=')
-            ancestry_map[y] = x
+        # Remove everything before the colon, if present
+        if ':' in comment:
+            comment = comment.split(':', 1)[1].strip()
+
+        ancestry_map: Dict[str, str] = {}
+
+        # Split on tabs, spaces, commas, semicolons or any combination of them
+        tokens = [tok.strip() for tok in re.split(r'[,\t; ]+', comment) if tok]
+
+        for tok in tokens:
+            if '=' not in tok:
+                continue  # Skip invalid pieces
+
+            left, right = (p.strip() for p in tok.split('=', 1))
+
+            # Detect whether format is "Pop=0" or "0=Pop"
+            if left.isdigit() and not right.isdigit():
+                ancestry_map[left] = right       # 0=Africa
+            elif right.isdigit() and not left.isdigit():
+                ancestry_map[right] = left       # Africa=0
+            else:
+                # Fallback (if both sides are digits or both are pops, keep left as code)
+                ancestry_map[left] = right
 
         return ancestry_map
 
@@ -103,7 +120,7 @@ class MSPReader(LAIBaseReader):
                 if np.isnan(array).all():  # Fully NaN numeric array
                     return None
             elif array.dtype == np.object_ or np.issubdtype(array.dtype, np.str_):  # String or object types
-                if all(elem == '' or elem is None for elem in array):  # Empty or None strings
+                if np.all((array == '') | (array == None)):  # Empty or None strings
                     return None
         return array
 
@@ -137,8 +154,8 @@ class MSPReader(LAIBaseReader):
             first_line = f.readline()
             second_line = f.readline()
 
-        first_line_ = [h.replace('\n', '') for h in first_line.split("\t")]
-        second_line_ = [h.replace('\n', '') for h in second_line.split("\t")]
+        first_line_ = [h.strip() for h in first_line.split("\t")]
+        second_line_ = [h.strip() for h in second_line.split("\t")]
 
         # Determine which line contains the #chm reference value for the header
         if "#chm" in first_line_:
@@ -179,7 +196,7 @@ class MSPReader(LAIBaseReader):
         except KeyError:
             centimorgan_pos = None
             log.warning("Genetic (centimorgan) positions ('sgpos' and 'egpos') not found.")
-        
+
         # Extract window sizes (if available)
         try:
             window_sizes = msp_df['n snps'].to_numpy()
