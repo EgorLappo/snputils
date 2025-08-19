@@ -77,9 +77,9 @@ class maasMDS:
                 Minimum percentage of SNPs to be known in an individual for an individual to be included in the analysis. 
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
             group_snp_frequencies_only (bool, default=True):
-                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
+                If True, maasMDS is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
                 set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are aggregated into groups based on their assigned 
-                labels. If False, mdPCA is performed on individual-level SNP data alone or on both individual-level and group-level SNP frequencies when 
+                labels. If False, maasMDS is performed on individual-level SNP data alone or on both individual-level and group-level SNP frequencies when 
                 `is_weighted` is True and a `combination` column is provided.
             save_masks (bool, default=False): 
                 True if the masked matrices are to be saved in a `.npz` file, or False otherwise.
@@ -333,9 +333,9 @@ class maasMDS:
         
         Returns:
             **bool:** 
-                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies 
+                If True, maasMDS is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies 
                 when `is_weighted` is set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are 
-                aggregated into groups based on their assigned labels. If False, mdPCA is performed on individual-level SNP data alone 
+                aggregated into groups based on their assigned labels. If False, maasMDS is performed on individual-level SNP data alone 
                 or on both individual-level and group-level SNP frequencies when `is_weighted` is True and a `combination` column is provided.
         """
         return self.__group_snp_frequencies_only
