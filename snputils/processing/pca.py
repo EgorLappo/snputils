@@ -88,10 +88,12 @@ class TorchPCA:
         return self.__n_components
     
     @n_components.setter
-    def n_components(self, x: torch.Tensor) -> None:
+    def n_components(self, x: Optional[int]) -> None:
         """
         Update `n_components`.
         """
+        if x is not None and (not isinstance(x, int) or x <= 0):
+            raise ValueError("n_components must be a positive integer or None.")
         self.__n_components = x
 
     @property
@@ -106,10 +108,13 @@ class TorchPCA:
         return self.__fitting
 
     @fitting.setter
-    def fitting(self, x: torch.Tensor) -> None:
+    def fitting(self, x: str) -> None:
         """
         Update `fitting`.
         """
+        allowed = {"full", "reduced", "lowrank"}
+        if x not in allowed:
+            raise ValueError(f"fitting must be one of {sorted(allowed)}")
         self.__fitting = x
 
     @property
@@ -325,6 +330,7 @@ class PCA:
             fitting (str, default='full'): 
                 The fitting approach to use for the SVD computation (only for `backend='pytorch'`). 
                 - `'full'`: Full Singular Value Decomposition (SVD).
+                - `'reduced'`: Economy SVD.
                 - `'lowrank'`: Low-rank approximation, which provides a faster but approximate solution.
                 Default is 'full'.
             device (str, default='cpu'): 

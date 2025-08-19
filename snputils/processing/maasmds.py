@@ -98,7 +98,7 @@ class maasMDS:
         self.__snpobj = snpobj
         self.__laiobj = laiobj
         self.__labels_file = labels_file
-        self.__ancestry = self._define_ancestry(ancestry, laiobj.ancestry_map)
+        self.__ancestry = self._define_ancestry(ancestry, laiobj.ancestry_map) if laiobj is not None else None
         self.__is_masked = is_masked
         self.__average_strands = average_strands
         self.__force_nan_incomplete_strands = force_nan_incomplete_strands
@@ -204,21 +204,21 @@ class maasMDS:
         self.__labels_file = x
 
     @property
-    def ancestry(self) -> Optional[str]:
+    def ancestry(self) -> Optional[int]:
         """
         Retrieve `ancestry`.
         
         Returns:
-            **str:** Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
+            **int:** Ancestry index for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
         """
         return self.__ancestry
 
     @ancestry.setter
-    def ancestry(self, x: str) -> None:
+    def ancestry(self, x: Union[int, str]) -> None:
         """
         Update `ancestry`.
         """
-        self.__ancestry = x
+        self.__ancestry = self._define_ancestry(x, self.laiobj.ancestry_map) if self.laiobj is not None else None
 
     @property
     def is_masked(self) -> bool:
@@ -534,7 +534,7 @@ class maasMDS:
         Returns:
             **array of shape (n_snp,):** 
                 An array containing unique identifiers (IDs) for each SNP,
-                potentially reduced if there are SNPs not present in the `laiboj`.
+                potentially reduced if there are SNPs not present in the `laiobj`.
                 The format will depend on `rsid_or_chrompos`.
         """
         return self.__variants_id_
