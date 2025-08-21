@@ -326,7 +326,7 @@ def convert(overlap_1, overlap_2, array, rs_IDs, distance_type, plot_reg, index)
     array          : Combined matrix of two arrays individuals across common snps.
     rs_IDs         : List of all positions present in array. 
     distance_type  : Distance function utilized in computation. Defaulted to be 'AP'.
-                     Options to choose from are: 'Manhattan', 'Euclidean', 'AP'
+                     Options to choose from are: 'Manhattan', 'RMS', 'AP'
 
     Returns                                                                                   
     -------                                                                                   
@@ -386,7 +386,7 @@ def conversion_metrics(ancestry, ref_col, ref_row, num_arrays, rs_ID_list, binar
                      List of masked matrices for each ancestries at each given array.
     distance_type  : string
                      Distance function utilized in computation. Defaulted to be 'AP'.
-                     Options to choose from are: 'Manhattan', 'Euclidean', 'AP'
+                     Options to choose from are: 'Manhattan', 'RMS', 'AP'
                                                                    
     Returns                                                                                   
     -------                                                                                   
@@ -458,7 +458,7 @@ def distance_overlap(ref_col, ref_row, num_arrays, overlap, conversion, intercep
                   arrays determined with a row and column.
     distance_type : string
                   Distance function utilized in computation. Defaulted to be 'AP'.
-                  Options to choose from are: 'Manhattan', 'Euclidean', 'AP'
+                  Options to choose from are: 'Manhattan', 'RMS', 'AP'
                                                                                 
     Returns                                                                                   
     -------                                                                                   
@@ -584,16 +584,22 @@ def mds_transform(distance_list, groups, weights, ind_ID_list, num_dims, num_arr
     ---------- 
     distance_list: (num_arrays, num_arrays) list 
                    List of computed distances on all individuals in the dataset. 
-    groups       : (n, ) array
+    groups       : (n,) array
                    Corresponding groups for each individual in the dataset.
-                   Order is consistent to order of individuals in the distance matrix.
-    ind_ID_list  : 
+                   Order is consistent with the order of individuals in the distance matrix.
+    weights      : (n,) array
+                   Weight assigned to each individual when performing weighted classical MDS.
+    ind_ID_list  : list of str
                    List of individual IDs for each of the processed arrays.
-    num_arrays   : Total number of arrays in dataset.
-                                                                                
+    num_dims     : int
+                   Number of MDS dimensions to return.
+    num_arrays   : int
+                   Total number of arrays in the dataset.
+                                                                                 
     Returns                                                                                   
     -------                                                                                   
-    None
+    np.ndarray of shape (n, num_dims)
+        The MDS embedding for the n individuals across the requested dimensions.
     """
     ind_IDs = ind_ID_list
     for i in range(1,num_arrays):

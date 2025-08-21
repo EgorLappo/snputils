@@ -77,9 +77,9 @@ class maasMDS:
                 Minimum percentage of SNPs to be known in an individual for an individual to be included in the analysis. 
                 All individuals with fewer percent of unmasked SNPs than this threshold will be excluded.
             group_snp_frequencies_only (bool, default=True):
-                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
+                If True, maasMDS is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies when `is_weighted` is 
                 set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are aggregated into groups based on their assigned 
-                labels. If False, mdPCA is performed on individual-level SNP data alone or on both individual-level and group-level SNP frequencies when 
+                labels. If False, maasMDS is performed on individual-level SNP data alone or on both individual-level and group-level SNP frequencies when 
                 `is_weighted` is True and a `combination` column is provided.
             save_masks (bool, default=False): 
                 True if the masked matrices are to be saved in a `.npz` file, or False otherwise.
@@ -98,7 +98,7 @@ class maasMDS:
         self.__snpobj = snpobj
         self.__laiobj = laiobj
         self.__labels_file = labels_file
-        self.__ancestry = self._define_ancestry(ancestry, laiobj.ancestry_map)
+        self.__ancestry = self._define_ancestry(ancestry, laiobj.ancestry_map) if laiobj is not None else None
         self.__is_masked = is_masked
         self.__average_strands = average_strands
         self.__force_nan_incomplete_strands = force_nan_incomplete_strands
@@ -204,21 +204,21 @@ class maasMDS:
         self.__labels_file = x
 
     @property
-    def ancestry(self) -> Optional[str]:
+    def ancestry(self) -> Optional[int]:
         """
         Retrieve `ancestry`.
         
         Returns:
-            **str:** Ancestry for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
+            **int:** Ancestry index for which dimensionality reduction is to be performed. Ancestry counter starts at `0`.
         """
         return self.__ancestry
 
     @ancestry.setter
-    def ancestry(self, x: str) -> None:
+    def ancestry(self, x: Union[int, str]) -> None:
         """
         Update `ancestry`.
         """
-        self.__ancestry = x
+        self.__ancestry = self._define_ancestry(x, self.laiobj.ancestry_map) if self.laiobj is not None else None
 
     @property
     def is_masked(self) -> bool:
@@ -333,9 +333,9 @@ class maasMDS:
         
         Returns:
             **bool:** 
-                If True, mdPCA is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies 
+                If True, maasMDS is performed exclusively on group-level SNP frequencies, ignoring individual-level data. This applies 
                 when `is_weighted` is set to True and a `combination` column is provided in the `labels_file`,  meaning individuals are 
-                aggregated into groups based on their assigned labels. If False, mdPCA is performed on individual-level SNP data alone 
+                aggregated into groups based on their assigned labels. If False, maasMDS is performed on individual-level SNP data alone 
                 or on both individual-level and group-level SNP frequencies when `is_weighted` is True and a `combination` column is provided.
         """
         return self.__group_snp_frequencies_only
@@ -534,7 +534,7 @@ class maasMDS:
         Returns:
             **array of shape (n_snp,):** 
                 An array containing unique identifiers (IDs) for each SNP,
-                potentially reduced if there are SNPs not present in the `laiboj`.
+                potentially reduced if there are SNPs not present in the `laiobj`.
                 The format will depend on `rsid_or_chrompos`.
         """
         return self.__variants_id_
