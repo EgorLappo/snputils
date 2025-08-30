@@ -146,3 +146,6 @@ testing_pca.py
 
 # .DS_Store
 .DS_Store
+# pixi environments
+.pixi
+*.egg-info

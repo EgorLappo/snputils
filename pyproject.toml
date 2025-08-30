@@ -7,7 +7,7 @@ name = "snputils"
 dynamic = ["version"]  # Version is set by setuptools_scm and determined by the latest git tag
 description = "Process genomes with ease"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "BSD 3-Clause License"}
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
@@ -22,8 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "numpy<2; python_version < '3.10'",
-    "numpy; python_version >= '3.10'",
+    "numpy",
     "pandas",
     "pandas-stubs",
     "scikit-learn",
@@ -86,3 +85,20 @@ extras =
     docs
 commands = python -m pytest -vv --color=yes --cov=snputils --cov-report=xml
 """
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+snputils = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+benchmark = { features = ["benchmark"], solve-group = "default" }
+demos = { features = ["demos"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
+gpu = { features = ["gpu"], solve-group = "default" }
+tests = { features = ["tests"], solve-group = "default" }
+
+[tool.pixi.tasks]
